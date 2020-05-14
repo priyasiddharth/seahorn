@@ -13,4 +13,3 @@ jobs:
       - uses: wagoid/commitlint-github-action@v1.6.0
         with:
           configFile: './.commitlintrc.yml'
-	  

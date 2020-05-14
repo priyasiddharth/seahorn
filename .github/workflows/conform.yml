@@ -6,6 +6,7 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v2
-      with: { fetch-depth: 0 }
+      with:
+	fetch-depth: 0
     - name: Conform Action
       uses: docker://autonomy/conform:v0.1.0-alpha.19-6-gcea1ee9

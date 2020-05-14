@@ -11,5 +11,6 @@ jobs:
         with:
           fetch-depth: 0
       - uses: wagoid/commitlint-github-action@v1.6.0
-      	with:
+        with:
           configFile: './.commitlintrc.yml'
+	  

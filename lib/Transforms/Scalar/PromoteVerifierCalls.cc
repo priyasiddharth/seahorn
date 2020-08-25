@@ -26,6 +26,7 @@ bool PromoteVerifierCalls::runOnModule(Module &M) {
   m_assumeFn = SBI.mkSeaBuiltinFn(SBIOp::ASSUME, M);
   Function *assumeNotFn = SBI.mkSeaBuiltinFn(SBIOp::ASSUME_NOT, M);
   m_assertFn = SBI.mkSeaBuiltinFn(SBIOp::ASSERT, M);
+  m_assertNotFn = SBI.mkSeaBuiltinFn(SBIOp::ASSERT_NOT, M);
   m_failureFn = SBI.mkSeaBuiltinFn(SBIOp::FAIL, M);
   m_errorFn = SBI.mkSeaBuiltinFn(SBIOp::ERROR, M);
   m_is_deref = SBI.mkSeaBuiltinFn(SBIOp::IS_DEREFERENCEABLE, M);
@@ -69,6 +70,7 @@ bool PromoteVerifierCalls::runOnModule(Module &M) {
     cg->getOrInsertFunction(m_assumeFn);
     cg->getOrInsertFunction(assumeNotFn);
     cg->getOrInsertFunction(m_assertFn);
+    cg->getOrInsertFunction(m_assertNotFn);
     cg->getOrInsertFunction(m_errorFn);
     cg->getOrInsertFunction(m_failureFn);
   }
@@ -119,6 +121,8 @@ bool PromoteVerifierCalls::runOnFunction(Function &F) {
         nfn = m_assumeFn;
       else if (fn->getName().equals("__VERIFIER_assert"))
         nfn = m_assertFn;
+      else if (fn->getName().equals("__VERIFIER_assert_not"))
+        nfn = m_assertNotFn;
       else if (fn->getName().equals("__CPROVER_assume"))
         nfn = m_assumeFn;
       else

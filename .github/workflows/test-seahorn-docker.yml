@@ -4,12 +4,18 @@ name: CI
 
 # Controls when the action will run. 
 on:
+  workflow_dispatch:  # Allows you to run this workflow manually from the Actions tab
+    inputs:
+      Buildcop:
+        description: 'Build cop name'     
+        required: true
+      tags:
+        description: 'Name of Build cop'  
   # Triggers the workflow on push or pull request events but only for the master branch
   push:
     branches: dev10
   pull_request:
     branches: dev10
-  workflow_dispatch:  # Allows you to run this workflow manually from the Actions tab
   schedule:
     - cron: 0 0 * * *  # run every day at UTC 00:00
 

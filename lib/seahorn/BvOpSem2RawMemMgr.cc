@@ -565,7 +565,7 @@ Expr RawMemManagerCore::loadValueFromMem(const PtrTy &ptr, const MemValTy &mem,
     llvm_unreachable(nullptr);
     break;
   case Type::FixedVectorTyID:
-  case Type::ScalableVectorTyID:      
+  case Type::ScalableVectorTyID:
     errs() << "Error: load of vectors is not supported\n";
     llvm_unreachable(nullptr);
     break;
@@ -608,7 +608,7 @@ RawMemManagerCore::storeValueToMem(Expr _val, PtrTy ptr, MemValTy mem,
     llvm_unreachable(nullptr);
     break;
   case Type::FixedVectorTyID:
-  case Type::ScalableVectorTyID:      
+  case Type::ScalableVectorTyID:
     errs() << "Error: store of vectors is not supported\n";
     llvm_unreachable(nullptr);
     break;
@@ -808,6 +808,33 @@ bool RawMemManagerCore::isPtrTyVal(Expr e) {
 
 bool RawMemManagerCore::isMemVal(Expr e) {
   return (e && !strct::isStructVal(e));
+}
+
+unsigned RawMemManagerCore::wordSizeInBytes() const {
+  auto &inst = m_ctx.getCurrentInst();
+  auto isCollapsed = false;
+  if (isa<CallInst>(&inst) &&
+      dyn_cast<CallInst>(&inst)->getCalledFunction()->getName().startswith(
+          "shadow.mem")) {
+    isCollapsed = m_sem.getShadowMemProp(dyn_cast<CallInst>(&inst));
+  } else if (inst.getPrevNonDebugInstruction() &&
+             isa<CallInst>(inst.getPrevNonDebugInstruction())) {
+    auto CI = dyn_cast<CallInst>(inst.getPrevNonDebugInstruction());
+    isCollapsed = (CI->getCalledFunction()->getName().startswith("shadow.mem"))
+                      ? m_sem.getShadowMemProp(CI)
+                      : false;
+  } else {
+    isCollapsed = false;
+  }
+  if (isCollapsed) {
+    WARN << inst << " wordSize:"
+         << (isCollapsed ? 1 : MemManagerCore::wordSizeInBytes());
+  }
+  return isCollapsed ? 1 : MemManagerCore::wordSizeInBytes();
+}
+
+unsigned RawMemManagerCore::wordSizeInBits() const {
+  return wordSizeInBytes() * 8;
 }
 
 } // namespace details

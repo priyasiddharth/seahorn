@@ -26,6 +26,7 @@ namespace details {
 class Bv2OpSemContext;
 Bv2OpSemContext &ctx(OpSemContext &_ctx);
 } // namespace details
+
 /**
    Bit-precise operational semantics for LLVM (take 2)
 
@@ -33,7 +34,7 @@ Bv2OpSemContext &ctx(OpSemContext &_ctx);
    considering undefined behaviour. Most operators are mapped
    directly to their logical equivalent SMT-LIB representation.
 
-   Memory is modelled by arrays.
+   Memory is modelled by arrays or lambdas.
  */
 class Bv2OpSem : public OperationalSemantics {
   Pass &m_pass;
@@ -47,6 +48,10 @@ class Bv2OpSem : public OperationalSemantics {
   using lvi_func_map_t =
       DenseMap<const llvm::Function *, LazyValueInfoWrapperPass *>;
   std::unique_ptr<lvi_func_map_t> m_lvi_map;
+
+  using shadow_node_memproper_map_t =
+      DenseMap<const char *,  bool>;
+  std::unique_ptr<shadow_node_memproper_map_t> m_shadow_node_prop_map;
 
   //// \brief crab's cfg builder manager
   std::unique_ptr<clam::CrabBuilderManager> m_cfg_builder_man;
@@ -178,5 +183,6 @@ public:
   void runLVIAnalysis(const llvm::Function &F);
   /// \brief Get the range of an instruction by LVI
   const llvm::ConstantRange getLVIInstRng(llvm::Instruction &I);
+  bool getShadowMemProp(const CallInst *shadowCI);
 };
 } // namespace seahorn

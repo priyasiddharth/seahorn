@@ -39,10 +39,11 @@ protected:
 
 public:
   template <typename... Ts>
-  OpSemMemManagerMixin(Ts &&... Args)
+  OpSemMemManagerMixin(Ts &&...Args)
       : BaseT(std::forward<Ts>(Args)...),
         OpSemMemManager(base().sem(), base().ctx(), base().ptrSizeInBytes(),
-                        base().wordSizeInBytes(), base().isIgnoreAlignment()) {}
+                        base().defaultWordSizeInBytes(),
+                        base().isIgnoreAlignment()) {}
   virtual ~OpSemMemManagerMixin() = default;
 
   PtrSortTy ptrSort() const override {

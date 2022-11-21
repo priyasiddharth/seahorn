@@ -15,7 +15,6 @@
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/Regex.h"
 
-
 #include "seahorn/CallUtils.hh"
 #include "seahorn/Support/CFG.hh"
 #include "seahorn/Support/SeaDebug.h"
@@ -28,11 +27,11 @@
 
 #include "BvOpSem2Context.hh"
 
-#include "seahorn/clam_CfgBuilder.hh"
-#include "seahorn/clam_Clam.hh"
 #include "clam/ClamQueryAPI.hh"
 #include "clam/SeaDsaHeapAbstraction.hh"
 #include "crab/domains/abstract_domain_params.hpp"
+#include "seahorn/clam_CfgBuilder.hh"
+#include "seahorn/clam_Clam.hh"
 
 #include "seadsa/ShadowMem.hh"
 
@@ -720,8 +719,7 @@ public:
 
     IntegerType *Ty = dyn_cast<IntegerType>(CB.getType());
     if ((Ty && Ty->getBitWidth() % 16 != 0) || CB.arg_size() > 1) {
-      LOG("opsem",
-          ERR << "Cannot handle inline assembly: " << CB);
+      LOG("opsem", ERR << "Cannot handle inline assembly: " << CB);
       return;
     }
     InlineAsm *IA = cast<InlineAsm>(CB.getCalledOperand());
@@ -730,8 +728,7 @@ public:
     llvm::SplitString(AsmStr, AsmPieces, ";\n");
     switch (AsmPieces.size()) {
     default:
-      LOG("opsem",
-          ERR << "Cannot handle inline assembly: " << CB);
+      LOG("opsem", ERR << "Cannot handle inline assembly: " << CB);
       break;
     case 0:
       // This part handles the following type of inline assembly
@@ -761,8 +758,8 @@ public:
           AsmStr.compare(0, 13, "bswapq ${0:q}") == 0) {
         // No need to check constraints
         isAsmHandled = expandCallInst(cast<CallInst>(CB), [](CallInst &CI) {
-              return IntrinsicLowering::LowerToByteSwap(&CI);
-            });
+          return IntrinsicLowering::LowerToByteSwap(&CI);
+        });
       }
       // llvm.bswap.i16
       if (CB.getType()->isIntegerTy(16) &&
@@ -774,16 +771,14 @@ public:
         llvm::SplitString(StringRef(IA->getConstraintString()).substr(5),
                           AsmPieces, ",");
         // Try to replace a call instruction with a call to a bswap intrinsic
-        isAsmHandled =
-            clobbersFlagRegisters(AsmPieces) &&
-            expandCallInst(cast<CallInst>(CB),
-                           [](CallInst &CI) {
-                             return IntrinsicLowering::LowerToByteSwap(&CI);
-                           });
+        isAsmHandled = clobbersFlagRegisters(AsmPieces) &&
+                       expandCallInst(cast<CallInst>(CB), [](CallInst &CI) {
+                         return IntrinsicLowering::LowerToByteSwap(&CI);
+                       });
       }
       if (!isAsmHandled)
-        LOG("opsem", ERR << "Cannot handle inline assembly of integer swap: "
-                         << CB);
+        LOG("opsem",
+            ERR << "Cannot handle inline assembly of integer swap: " << CB);
       break;
     }
   }
@@ -1123,8 +1118,8 @@ public:
 
   void visitIndirectCall(CallBase &CB) {
     if (CB.getType()->isVoidTy()) {
-      LOG("opsem", WARN << "Interpreting indirect call as noop: "
-                        << CB << "\n";);
+      LOG("opsem",
+          WARN << "Interpreting indirect call as noop: " << CB << "\n";);
       return;
     }
     // treat as non-det and issue a warning
@@ -1133,7 +1128,8 @@ public:
 
   void visitVerifierAssumeCall(CallBase &CB) {
     // ignore assumes annotaed with "unified.assume"
-    if (isUnifiedAssume(CB)) return;
+    if (isUnifiedAssume(CB))
+      return;
     auto &f = *getCalledFunction(CB);
 
     Expr op = lookup(*CB.getOperand(0));
@@ -1143,9 +1139,8 @@ public:
       op = boolop::lneg(op);
 
     if (!isOpX<TRUE>(op)) {
-      m_ctx.addScopedSide(boolop::lor(
-          m_ctx.read(m_sem.errorFlag(*(CB.getParent()))),
-          op));
+      m_ctx.addScopedSide(
+          boolop::lor(m_ctx.read(m_sem.errorFlag(*(CB.getParent()))), op));
     }
   }
 
@@ -1272,8 +1267,7 @@ public:
       m_ctx.setMemReadRegister(memIn);
       m_ctx.setMemWriteRegister(memOut);
 
-      LOG("opsem.mem.global.init", errs()
-                                       << "mem.global.init: " << CB << "\n";
+      LOG("opsem.mem.global.init", errs() << "mem.global.init: " << CB << "\n";
           errs() << "arg1: " << *CB.getOperand(1) << "\n";
           errs() << "memIn: " << *memIn << ", memOut: " << *memOut << "\n";);
 
@@ -1350,8 +1344,8 @@ public:
     }
 
     if (is_typed) {
-      LOG("opsem", errs() << "Modelling " << CB
-                          << " with an uninterpreted function\n";);
+      LOG("opsem",
+          errs() << "Modelling " << CB << " with an uninterpreted function\n";);
       Expr name = mkTerm<const Function *>(getCalledFunction(CB), m_efac);
       Expr d = bind::fdecl(name, sorts);
       res = bind::fapp(d, fargs);
@@ -2904,6 +2898,7 @@ Bv2OpSem::Bv2OpSem(ExprFactory &efac, Pass &pass, const DataLayout &dl,
       m_td(&dl) {
   m_canFail = pass.getAnalysisIfAvailable<CanFail>();
   m_lvi_map = UseLVIInferRng ? std::make_unique<lvi_func_map_t>() : nullptr;
+  m_shadow_node_prop_map = std::make_unique<shadow_node_memproper_map_t>();
   auto *p = pass.getAnalysisIfAvailable<TargetLibraryInfoWrapperPass>();
   if (p)
     m_tliWrapper = p;
@@ -3161,7 +3156,7 @@ bool Bv2OpSem::isSkipped(const Value &v) const {
     // -- pointers are handled earlier in the procedure
     llvm_unreachable(nullptr);
   case Type::FixedVectorTyID:
-  case Type::ScalableVectorTyID:  
+  case Type::ScalableVectorTyID:
     LOG("opsem", WARN << "Unsupported vector type\n";);
     return true;
   default:
@@ -3410,8 +3405,8 @@ void Bv2OpSem::runCrabAnalysis() {
   aparams.widening_delay = 2; // set to delay widening
 
   if (UseCrabCheckIsDeref) {
-    crab::domains::crab_domain_params_man::get().
-      set_param("region.is_dereferenceable", "true");
+    crab::domains::crab_domain_params_man::get().set_param(
+        "region.is_dereferenceable", "true");
   }
   /// Run the Crab analysis
   clam::ClamGlobalAnalysis::abs_dom_map_t assumptions;
@@ -3430,6 +3425,24 @@ void Bv2OpSem::runLVIAnalysis(const Function &F) {
       m_lvi_map->insert({&F, m_lvi});
       LOG("opsem-rng", MSG << "Running LVI on function: " << F.getName(););
     }
+  }
+}
+
+bool Bv2OpSem::getShadowMemProp(const CallInst *shadowCI) {
+  seadsa::ShadowMemPass *smp = &m_pass.getAnalysis<seadsa::ShadowMemPass>();
+  assert(smp);
+  auto shadowMem = &smp->getShadowMem();
+  auto opt_c = shadowMem->getShadowMemCell(*shadowCI);
+  assert(opt_c.hasValue());
+  assert(shadowCI);
+  auto it = m_shadow_node_prop_map->find((char *)opt_c->getNode());
+  if (it != m_shadow_node_prop_map->end()) {
+    return it->second;
+  } else {
+    auto *node = opt_c->getNode();
+    m_shadow_node_prop_map->insert({(char *)node, node->isOffsetCollapsed()});
+    // return is_collapsed true by default
+    return node->isOffsetCollapsed();
   }
 }
 

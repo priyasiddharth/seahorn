@@ -360,6 +360,8 @@ public:
 
   Bv2OpSem &sem() const { return m_sem; }
   Bv2OpSemContext &ctx() const { return m_ctx; }
+  unsigned int wordSizeInBytes() const;
+  unsigned int wordSizeInBits() const;
 };
 
 inline std::ostream &operator<<(std::ostream &OS,

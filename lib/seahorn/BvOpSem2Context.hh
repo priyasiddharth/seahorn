@@ -526,6 +526,7 @@ public:
 
   unsigned ptrSizeInBits() const { return m_ptrSz * 8; }
   unsigned ptrSizeInBytes() const { return m_ptrSz; }
+  unsigned defaultWordSizeInBytes() const { return m_wordSz; }
   unsigned wordSizeInBytes() const { return m_wordSz; }
   unsigned wordSizeInBits() const { return m_wordSz * 8; }
   uint32_t getAlignment(const llvm::Value &v) const { return m_alignment; }

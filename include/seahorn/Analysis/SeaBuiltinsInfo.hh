@@ -31,6 +31,12 @@ enum class SeaBuiltinsOp {
   FREE,               /* sea.free */
   SET_SHADOWMEM,      /* sea.set_shadowmem */
   GET_SHADOWMEM,      /* sea.get_shadowmem */
+  MK_OWN,
+  BOR_MKBOR,
+  BOR_MKSUC,
+  BEGIN_UNIQUE,
+  END_UNIQUE,
+  DIE,
   UNKNOWN
 };
 
@@ -55,6 +61,12 @@ class SeaBuiltinsInfo {
   llvm::Function *mkFreeFn(llvm::Module &M);
   llvm::Function *mkSetShadowMem(llvm::Module &M);
   llvm::Function *mkGetShadowMem(llvm::Module &M);
+  llvm::Function *mkMkOwn(llvm::Module &M);
+  llvm::Function *mkBorMkBor(llvm::Module &M);
+  llvm::Function *mkBorMkSuc(llvm::Module &M);
+  llvm::Function *mkBeginUnique(llvm::Module &M);
+  llvm::Function *mkEndUnique(llvm::Module &M);
+  llvm::Function *mkDie(llvm::Module &M);
 
 public:
   SeaBuiltinsOp getSeaBuiltinOp(const llvm::CallBase &cb) const;

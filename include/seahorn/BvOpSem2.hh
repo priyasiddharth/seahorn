@@ -8,6 +8,7 @@
 #include "llvm/IR/GetElementPtrTypeIterator.h"
 #include "llvm/Pass.h"
 
+#include <betterenum/enum.h>
 #include <boost/container/flat_set.hpp>
 
 // forward declarations
@@ -23,9 +24,12 @@ class InterGlobalClam;
 
 namespace seahorn {
 namespace details {
+
 class Bv2OpSemContext;
 Bv2OpSemContext &ctx(OpSemContext &_ctx);
 } // namespace details
+BETTER_ENUM(OwnType, int, Own = 1, Bor, Unq, Shr)
+
 /**
    Bit-precise operational semantics for LLVM (take 2)
 
@@ -47,6 +51,10 @@ class Bv2OpSem : public OperationalSemantics {
   using lvi_func_map_t =
       DenseMap<const llvm::Function *, LazyValueInfoWrapperPass *>;
   std::unique_ptr<lvi_func_map_t> m_lvi_map;
+
+  /// \brief owntype map used for analysis
+  using owntype_map_t = DenseMap<Expr, OwnType>;
+  std::unique_ptr<owntype_map_t> m_ownType_map;
 
   //// \brief crab's cfg builder manager
   std::unique_ptr<clam::CrabBuilderManager> m_cfg_builder_man;
@@ -184,5 +192,9 @@ public:
   void runLVIAnalysis(const llvm::Function &F);
   /// \brief Get the range of an instruction by LVI
   const llvm::ConstantRange getLVIInstRng(llvm::Instruction &I);
+
+  void inferOwnTypeFunction(const llvm::Function &F);
+
+  OwnType getOwnType(const Instruction &inst);
 };
 } // namespace seahorn

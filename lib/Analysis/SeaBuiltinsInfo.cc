@@ -34,6 +34,14 @@ using namespace llvm;
 #define SEA_SET_SHADOWMEM "sea.set_shadowmem"
 #define SEA_GET_SHADOWMEM "sea.get_shadowmem"
 
+// Instrinsics for Cache-at-ptr
+#define SEA_MK_OWN "sea.mkown"
+#define SEA_BOR_MKBOR "sea.bor_mkbor"
+#define SEA_BOR_MKSUC "sea.bor_mksuc"
+#define SEA_BEGIN_UNIQUE "sea.begin_unique"
+#define SEA_END_UNIQUE "sea.end_unique"
+#define SEA_DIE "sea.die"
+
 SeaBuiltinsOp
 seahorn::SeaBuiltinsInfo::getSeaBuiltinOp(const llvm::CallBase &cb) const {
   using SBIOp = SeaBuiltinsOp;
@@ -63,6 +71,12 @@ seahorn::SeaBuiltinsInfo::getSeaBuiltinOp(const llvm::CallBase &cb) const {
       .Case(SEA_FREE, SBIOp::FREE)
       .Case(SEA_SET_SHADOWMEM, SBIOp::SET_SHADOWMEM)
       .Case(SEA_GET_SHADOWMEM, SBIOp::GET_SHADOWMEM)
+      .Case(SEA_MK_OWN, SBIOp::MK_OWN)
+      .Case(SEA_BOR_MKBOR, SBIOp::BOR_MKBOR)
+      .Case(SEA_BOR_MKSUC, SBIOp::BOR_MKSUC)
+      .Case(SEA_BEGIN_UNIQUE, SBIOp::BEGIN_UNIQUE)
+      .Case(SEA_END_UNIQUE, SBIOp::END_UNIQUE)
+      .Case(SEA_DIE, SBIOp::DIE)
       .Default(SBIOp::UNKNOWN);
 }
 
@@ -112,6 +126,18 @@ llvm::Function *SeaBuiltinsInfo::mkSeaBuiltinFn(SeaBuiltinsOp op,
     return mkSetShadowMem(M);
   case SBIOp::GET_SHADOWMEM:
     return mkGetShadowMem(M);
+  case SBIOp::MK_OWN:
+    return mkMkOwn(M);
+  case SBIOp::BOR_MKBOR:
+    return mkBorMkBor(M);
+  case SBIOp::BOR_MKSUC:
+    return mkBorMkSuc(M);
+  case SBIOp::BEGIN_UNIQUE:
+    return mkBeginUnique(M);
+  case SBIOp::END_UNIQUE:
+    return mkEndUnique(M);
+  case SBIOp::DIE:
+    return mkDie(M);
   }
   llvm_unreachable(nullptr);
 }
@@ -425,6 +451,110 @@ Function *SeaBuiltinsInfo::mkFreeFn(Module &M) {
     FN->addParamAttr(0, Attribute::NoCapture);
     // XXX maybe even add the following
     // FN->setDoesNotAccessMemory();
+  }
+  return FN;
+}
+Function *SeaBuiltinsInfo::mkMkOwn(Module &M) {
+  // This consumes a shared ptr and returns an owned ptr
+  auto &C = M.getContext();
+  auto FC = M.getOrInsertFunction(SEA_MK_OWN,
+                                  Type::getInt8PtrTy(C) /* return  */, 
+                                  Type::getInt8PtrTy(C) /* param */);
+  auto *FN = dyn_cast<Function>(FC.getCallee());
+  if (FN) {
+    FN->setDoesNotThrow();
+    FN->setDoesNotRecurse();
+    FN->setDoesNotFreeMemory();
+    FN->addParamAttr(0, Attribute::NoCapture);
+    // TODO: is the following too weak
+    FN->setDoesNotAccessMemory();
+  }
+  return FN;
+}
+Function *SeaBuiltinsInfo::mkBorMkBor(Module &M) {
+  // This consumes an owned/borowed/uniqued ptr and returns a bowrrowed ptr
+  auto &C = M.getContext();
+  auto FC = M.getOrInsertFunction(SEA_BOR_MKBOR,
+                                  Type::getInt8PtrTy(C) /* return  */, 
+                                  Type::getInt8PtrTy(C) /* param */);
+  auto *FN = dyn_cast<Function>(FC.getCallee());
+  if (FN) {
+    FN->setDoesNotThrow();
+    FN->setDoesNotRecurse();
+    FN->setDoesNotFreeMemory();
+    FN->addParamAttr(0, Attribute::NoCapture);
+    // TODO: is the following too weak
+    FN->setDoesNotAccessMemory();
+  }
+  return FN;
+}
+Function *SeaBuiltinsInfo::mkBorMkSuc(Module &M) {
+  // This consumes an KIND (owned/borowed/uniqued) ptr and returns a KIND ptr.
+  // This ptr will not be used until ptr created by bor_mkbor dies.
+  auto &C = M.getContext();
+  auto FC = M.getOrInsertFunction(SEA_BOR_MKSUC,
+                                  Type::getInt8PtrTy(C) /* return  */, 
+                                  Type::getInt8PtrTy(C) /* param */);
+  auto *FN = dyn_cast<Function>(FC.getCallee());
+  if (FN) {
+    FN->setDoesNotThrow();
+    FN->setDoesNotRecurse();
+    FN->setDoesNotFreeMemory();
+    FN->addParamAttr(0, Attribute::NoCapture);
+    // TODO: is the following too weak
+    FN->setDoesNotAccessMemory();
+  }
+  return FN;
+}
+Function *SeaBuiltinsInfo::mkBeginUnique(Module &M) {
+  // This consumes a shared ptr and creates a unique ptr.
+  // A unique ptr cannot escape to memory
+  auto &C = M.getContext();
+  auto FC = M.getOrInsertFunction(SEA_BEGIN_UNIQUE,
+                                  Type::getInt8PtrTy(C) /* return  */, 
+                                  Type::getInt8PtrTy(C) /* param */);
+  auto *FN = dyn_cast<Function>(FC.getCallee());
+  if (FN) {
+    FN->setDoesNotThrow();
+    FN->setDoesNotRecurse();
+    FN->setDoesNotFreeMemory();
+    FN->addParamAttr(0, Attribute::NoCapture);
+    // TODO: is the following too weak
+    FN->setDoesNotAccessMemory();
+  }
+  return FN;
+}
+Function *SeaBuiltinsInfo::mkEndUnique(Module &M) {
+  // This consumes a unique ptr and returns a shared ptr
+  auto &C = M.getContext();
+  auto FC = M.getOrInsertFunction(SEA_END_UNIQUE,
+                                  Type::getInt8PtrTy(C) /* return  */, 
+                                  Type::getInt8PtrTy(C) /* param */);
+  auto *FN = dyn_cast<Function>(FC.getCallee());
+  if (FN) {
+    FN->setDoesNotThrow();
+    FN->setDoesNotRecurse();
+    FN->setDoesNotFreeMemory();
+    FN->addParamAttr(0, Attribute::NoCapture);
+    // TODO: is the following too weak
+    FN->setDoesNotAccessMemory();
+  }
+  return FN;
+}
+Function *SeaBuiltinsInfo::mkDie(Module &M) {
+  // This consumes a ptr and semantically marks it as dead.
+  auto &C = M.getContext();
+  auto FC = M.getOrInsertFunction(SEA_BOR_MKBOR,
+                                  Type::getVoidTy(C) /* return  */, 
+                                  Type::getInt8PtrTy(C) /* param */);
+  auto *FN = dyn_cast<Function>(FC.getCallee());
+  if (FN) {
+    FN->setDoesNotThrow();
+    FN->setDoesNotRecurse();
+    FN->setDoesNotFreeMemory();
+    FN->addParamAttr(0, Attribute::NoCapture);
+    // TODO: is the following too weak
+    FN->setDoesNotAccessMemory();
   }
   return FN;
 }

@@ -1,5 +1,9 @@
 #ifndef _SEAHORN__H_
 #define _SEAHORN__H_
+
+#include <seadsa/sea_dsa.h>
+#include <seahorn/ownsem.h>
+
 #include <stdbool.h>
 #include <stdint.h>
 

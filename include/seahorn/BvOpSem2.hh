@@ -8,7 +8,7 @@
 #include "llvm/IR/GetElementPtrTypeIterator.h"
 #include "llvm/Pass.h"
 
-#include <seahorn/boost_flat_set.hh>
+#include <boost/container/flat_set.hpp>
 
 // forward declarations
 namespace llvm {
@@ -26,6 +26,7 @@ namespace details {
 class Bv2OpSemContext;
 Bv2OpSemContext &ctx(OpSemContext &_ctx);
 } // namespace details
+
 /**
    Bit-precise operational semantics for LLVM (take 2)
 

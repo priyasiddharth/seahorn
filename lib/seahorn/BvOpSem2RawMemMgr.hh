@@ -8,6 +8,9 @@
 #include "seahorn/Expr/ExprLlvm.hh"
 #include "seahorn/Support/SeaDebug.h"
 #include "seahorn/Support/SeaLog.hh"
+#include "seahorn/Expr/TypeChecker.hh"
+#include "seahorn/Expr/TypeCheckerUtils.hh"
+#include "seahorn/Expr/ExprOpSort.hh"
 
 namespace seahorn {
 namespace details {
@@ -35,6 +38,8 @@ public:
   RawMemManagerCore(Bv2OpSem &sem, Bv2OpSemContext &ctx, unsigned ptrSz,
                     unsigned wordSz, bool useLambdas, bool ignoreAlignment);
 
+  RawMemManagerCore(const RawMemManagerCore &orig);
+
   ~RawMemManagerCore();
 
   OpSemAllocator &getMAllocator() const;
@@ -45,12 +50,20 @@ public:
     Expr m_v;
 
     explicit MemValTyImpl(Expr &&raw_val) {
+      TypeChecker tc;
       assert(!raw_val || !strct::isStructVal(raw_val));
+      if (raw_val) {
+        assert((expr::op::typeCheck::correctTypeAny<ARRAY_TY,FUNCTIONAL_TY>(raw_val, tc)));
+      }
       m_v = std::move(raw_val);
     }
 
     explicit MemValTyImpl(const Expr &raw_val) {
+      TypeChecker tc;
       assert(!raw_val || !strct::isStructVal(raw_val));
+      if (raw_val) {
+        assert((expr::op::typeCheck::correctTypeAny<ARRAY_TY,FUNCTIONAL_TY>(raw_val, tc)));
+      }
       m_v = raw_val;
     }
 
@@ -356,7 +369,7 @@ public:
 
   bool isMemVal(Expr e);
 
-  PtrTy getAddressable(PtrTy p);
+  PtrTy getAddressable(PtrTy p) const;
 
   Bv2OpSem &sem() const { return m_sem; }
   Bv2OpSemContext &ctx() const { return m_ctx; }

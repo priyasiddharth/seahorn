@@ -1,7 +1,7 @@
 #include "BvOpSem2Context.hh"
-#include "BvOpSem2RawMemMgr.hh"
-
+#include "BvOpSem2ExtraWideMemMgr.hh"
 #include "BvOpSem2MemManagerMixin.hh"
+#include "BvOpSem2RawMemMgr.hh"
 
 #include "llvm/IR/GetElementPtrTypeIterator.h"
 #include "llvm/Support/Format.h"
@@ -11,127 +11,289 @@
 #include "seahorn/Support/SeaDebug.h"
 #include "seahorn/Support/SeaLog.hh"
 
+#include <boost/variant.hpp>
+
+static llvm::cl::opt<unsigned>
+    FatMemSlots("horn-bv2-num-fat-slots",
+                llvm::cl::desc("Number of fat slots to initiate FatMemManager with"),
+                llvm::cl::init(3));
+
 namespace seahorn {
 namespace details {
 
 static const unsigned int g_slotBitWidth = 64;
 static const unsigned int g_slotByteWidth = g_slotBitWidth / 8;
 
-static const unsigned int g_maxFatSlots = 2;
+// TODO: remove these vars
+// static const unsigned int g_undefSlot0 = 0xDEF0;
+// static const unsigned int g_undefSlot1 = 0xDEF1;
+
 /// \brief provides Fat pointers and Fat memory to store them
-class FatMemManager : public MemManagerCore {
+template <class T> class FatMemManager : public MemManagerCore {
 public:
+  /// Right now everything is an expression. In the future, we might have
+  /// other types for PtrTy, such as a tuple of expressions
+  using MainPtrTy = typename T::PtrTy;
+  using RawPtrTy = OpSemMemManager::PtrTy;
+  using MainMemValTy = typename T::MemValTy;
+  using RawMemValTy = OpSemMemManager::MemValTy;
+  using AnyPtrTy = Expr;
+  using AnyMemValTy = Expr;
+
+  /// \brief Source of unique identifiers
+  mutable unsigned m_id;
+
+  llvm::Twine m_fatMemBaseName;
+
   /// PtrTy representation for this manager
   ///
   /// Currently internal representation is just an Expr
   struct PtrTyImpl {
     Expr m_v;
-    PtrTyImpl(Expr &&e) : m_v(std::move(e)) {}
-    PtrTyImpl(const Expr &e) : m_v(e) {}
+
+    explicit PtrTyImpl(llvm::SmallVector<AnyPtrTy, 8> &&slots) {
+      assert(slots.size() == FatMemSlots + 1);
+      for (auto e : slots) {
+        assert(e);
+      }
+      m_v = strct::mk(std::move(slots));
+    }
+
+    explicit PtrTyImpl(llvm::SmallVector<AnyPtrTy, 8> &slots) {
+      assert(slots.size() == FatMemSlots + 1);
+      for (auto e : slots) {
+        assert(e);
+      }
+      m_v = strct::mk(slots);
+    }
+
+    explicit PtrTyImpl(const Expr &e) {
+      // Our base is a struct of three exprs
+      assert(strct::isStructVal(e));
+      assert(e->arity() == FatMemSlots + 1);
+      for (unsigned i = 0, sz = e->arity(); i < sz; i++) {
+        assert(e->arg(i));
+      }
+      m_v = e;
+    }
 
     Expr v() const { return m_v; }
     Expr toExpr() const { return v(); }
     explicit operator Expr() const { return toExpr(); }
+
+    MainPtrTy getMain() { return strct::extractVal(m_v, 0); }
+
+    MainPtrTy getRaw() { return getMain(); }
+
+    Expr getSlot(unsigned idx) {
+      assert(idx < FatMemSlots + 1);
+      auto e = strct::extractVal(m_v, idx);
+      assert(e); // e is not null
+      return e;
+    }
   };
 
-  /// MemValTy representation for this manager
-  ///
-  /// Currently internal representation is just an Expr
   struct MemValTyImpl {
     Expr m_v;
-    MemValTyImpl(Expr &&e) : m_v(std::move(e)) {}
-    MemValTyImpl(const Expr &e) : m_v(e) {}
+
+    explicit MemValTyImpl(llvm::SmallVector<AnyMemValTy, 8> &&vals) {
+      //assert(!strct::isStructVal(slot0_val));
+      //assert(!strct::isStructVal(slot1_val));
+      assert(vals.size() == FatMemSlots + 1);
+      for (auto e : vals) {
+        assert(e);
+      }
+      // TODO: add back isStructVal check
+      m_v = strct::mk(std::move(vals));
+    }
+
+    explicit MemValTyImpl(llvm::SmallVector<AnyMemValTy, 8> &vals) {
+      assert(vals.size() == FatMemSlots + 1);
+      //assert(!strct::isStructVal(slot0_val));
+      // assert(!strct::isStructVal(slot1_val));
+      for (auto e : vals) {
+        assert(e);
+      }
+
+      // TODO: add back isStructVal check
+      m_v = strct::mk(vals);
+    }
+
+    explicit MemValTyImpl(const Expr &e) {
+      // Our base is Expr() or a struct of three exprs
+      assert(!e || strct::isStructVal(e));
+      for (unsigned i=0; i < FatMemSlots; i++) {
+        assert(!e || !strct::isStructVal(e->arg(i + 1)));
+      }
+      if (e) {
+        assert(e->arity() == FatMemSlots + 1);
+        for (unsigned i = 0, sz = e->arity(); i < sz; i++) {
+          assert(e->arg(i));
+        }
+      }
+      m_v = e;
+    }
 
     Expr v() const { return m_v; }
     Expr toExpr() const { return v(); }
     explicit operator Expr() const { return toExpr(); }
-    Expr getRaw() { return strct::extractVal(m_v, 0); }
+
+    MainMemValTy getMain() { return !m_v ? m_v : strct::extractVal(m_v, 0); }
+
+    MainMemValTy getRaw() { return getMain(); }
+
+    Expr getSlot(unsigned idx) {
+      assert(idx < FatMemSlots + 1);
+      auto e = strct::extractVal(m_v, idx);
+      assert(e); // e is not null
+      return e;
+    }
   };
 
   using FatMemTag = MemoryFeatures::FatMem_tag;
-  using TrackingTag = int;
-  using WideMemTag = int;
+  using TrackingTag = typename T::TrackingTag;
+  using WideMemTag = typename T::WideMemTag;
 
-  /// Right now everything is an expression. In the future, we might have
-  /// other types for PtrTy, such as a tuple of expressions
-  using BasePtrTy = OpSemMemManager::PtrTy;
-  using RawPtrTy = OpSemMemManager::PtrTy;
-  using BaseMemValTy = OpSemMemManager::MemValTy;
+  using MemValTy = MemValTyImpl;
+  using PtrTy = PtrTyImpl;
 
-  using FatMemValTy = MemValTyImpl;
-  using FatPtrTy = PtrTyImpl;
-
-  using PtrTy = FatPtrTy;
-  using MemValTy = FatMemValTy;
-  using PtrSortTy = OpSemMemManager::PtrSortTy;
-  using MemSortTy = OpSemMemManager::MemSortTy;
+  using MainPtrSortTy = typename T::PtrSortTy;
+  using MainMemSortTy = typename T::MemSortTy;
   using MemRegTy = OpSemMemManager::MemRegTy;
+  using AnyPtrSortTy = Expr;
+  using AnyMemSortTy = Expr;
 
-  // TODO: change all slot0,1 methods to return these types for easier reading
+  // TODO: change all slot0,1 methods to return these types for easier
+  // reading
   using Slot0ValTy = Expr;
   using Slot1ValTy = Expr;
 
+  struct PtrSortTyImpl {
+    Expr m_ptr_sort;
+
+    explicit PtrSortTyImpl(llvm::SmallVector<AnyPtrSortTy, 8> &&ptrSorts) {
+      assert(ptrSorts.size() == FatMemSlots + 1);
+      for (auto e : ptrSorts) {
+        assert(e);
+      }
+      m_ptr_sort = sort::structTy(std::move(ptrSorts));
+    }
+
+    explicit PtrSortTyImpl(llvm::SmallVector<AnyPtrSortTy, 8> &ptrSorts) {
+      assert(ptrSorts.size() == FatMemSlots + 1);
+      for (auto e : ptrSorts) {
+        assert(e);
+      }
+      m_ptr_sort = sort::structTy(std::move(ptrSorts));
+    }
+
+    Expr v() const { return m_ptr_sort; }
+    Expr toExpr() const { return v(); }
+    explicit operator Expr() const { return toExpr(); }
+
+    MainPtrSortTy getBaseSort() { return m_ptr_sort->arg(0); }
+  };
+
+  struct MemSortTyImpl {
+    Expr m_mem_sort;
+
+    explicit MemSortTyImpl(llvm::SmallVector<AnyMemSortTy, 8> &&memSorts) {
+      assert(memSorts.size() == FatMemSlots + 1);
+      for (auto e : memSorts) {
+        assert(e);
+      }
+      m_mem_sort = sort::structTy(std::move(memSorts));
+    }
+
+    explicit MemSortTyImpl(llvm::SmallVector<AnyMemSortTy, 8> &memSorts) {
+      assert(memSorts.size() == FatMemSlots + 1);
+      for (auto e : memSorts) {
+        assert(e);
+      }
+      m_mem_sort = sort::structTy(memSorts);
+    }
+
+    Expr v() const { return m_mem_sort; }
+    Expr toExpr() const { return v(); }
+    explicit operator Expr() const { return toExpr(); }
+  };
+
+  using PtrSortTy = PtrSortTyImpl;
+  using MemSortTy = MemSortTyImpl;
+
 private:
   /// \brief Memory manager for raw pointers
-  RawMemManager m_main;
-  RawMemManager m_slot0;
-  RawMemManager m_slot1;
+  T m_main;
+  std::vector<RawMemManager> m_slots;
 
   /// \brief A null pointer expression (cache)
-  FatPtrTy m_nullPtr;
+  PtrTy m_nullPtr;
 
   /// \brief Converts a raw ptr to fat ptr with default value for fat
-  FatPtrTy mkFatPtr(RawPtrTy rawPtr) const {
-    return strct::mk(rawPtr, m_ctx.alu().ui(0, g_slotBitWidth),
-                     m_ctx.alu().ui(1, g_slotBitWidth));
+  PtrTy mkFatPtr(MainPtrTy mainPtr) const {
+    llvm::SmallVector<AnyPtrTy, 8> ptrVals;
+    ptrVals.push_back(mainPtr);
+    // assign fresh (nd) values to fat slots
+    for(unsigned i=0; i < FatMemSlots; i++) {
+      llvm::SmallString<100> tempStorage;
+      auto fullName = m_fatMemBaseName + "slot" + std::to_string(i);
+      auto fullNameExpr = mkTerm<std::string>(fullName.toStringRef(tempStorage).str(), m_efac);
+      Expr freshSlotVal = op::variant::variant(m_id, fullNameExpr);
+      Expr slotBind =
+        bind::mkConst(freshSlotVal, m_ctx.alu().intTy(g_slotBitWidth));
+      m_id++;
+      ptrVals.push_back(slotBind);
+    }
+    return PtrTy(ptrVals);
   }
 
-  /// \brief Converts a raw ptr to fat ptr with default value for fat
-  FatPtrTy mkFatPtr(RawPtrTy rawPtr, Slot0ValTy data0, Slot1ValTy data1) const {
-    // TODO: check if data0 and data1 bitwidth is <= max or always guaranteed?
-    return strct::mk(rawPtr, data0, data1);
+  /// \brief Assembles a fat ptr from parts
+  PtrTy mkFatPtr(llvm::SmallVector<AnyPtrTy, 8> slots) const {
+    // TODO: check if data0 and data1 bitwidth is <= max or always
+    // guaranteed?
+    return PtrTy(slots);
   }
 
-  /// \brief Update a given fat pointer with a raw address value
-  FatPtrTy mkFatPtr(RawPtrTy rawPtr, FatPtrTy fat) const {
+  /// \brief Update a given fat pointer with a "main" address value
+  PtrTy updateFatPtr(MainPtrTy mainPtr, PtrTy fat) const {
     if (fat.v()->arity() == 1)
-      return mkFatPtr(rawPtr);
+      return mkFatPtr(mainPtr);
 
-    llvm::SmallVector<Expr, 8> kids;
-    kids.push_back(rawPtr);
-    for (unsigned i = 1, sz = fat.v()->arity(); i < sz; ++i) {
+    llvm::SmallVector<AnyPtrTy, 8> kids;
+    assert(fat.v()->arity() == FatMemSlots + 1);
+    kids.push_back(mainPtr);
+    for (unsigned i = 1; i <= FatMemSlots; i++) {
       kids.push_back(fat.v()->arg(i));
     }
-    return strct::mk(kids);
+    return PtrTy(strct::mk(kids));
   }
 
-  /// \brief Extracts a raw pointer out of a fat pointer
-  RawPtrTy mkRawPtr(FatPtrTy fatPtr) const {
+  /// \brief Extracts a "main" pointer out of a fat pointer
+  MainPtrTy mkMainPtr(PtrTy fatPtr) const {
     assert(strct::isStructVal(fatPtr.v()));
-    return strct::extractVal(fatPtr.v(), 0);
+    return fatPtr.getMain();
   }
 
-  /// \brief Extracts a raw memory value from a fat memory value
-  BaseMemValTy mkRawMem(FatMemValTy fatMem) const {
+  /// \brief Extracts a "main" memory value from a fat memory value
+  MainMemValTy mkMainMem(MemValTy fatMem) const {
     assert(strct::isStructVal(fatMem.v()));
-    return strct::extractVal(fatMem.v(), 0);
+    return fatMem.getMain();
   }
 
-  BaseMemValTy mkSlot0Mem(FatMemValTy fatMem) const {
+  RawMemValTy mkSlot0Mem(MemValTy fatMem) const {
     assert(strct::isStructVal(fatMem.v()));
-    return strct::extractVal(fatMem.v(), 1);
+    return fatMem.getSlot0();
   }
 
-  BaseMemValTy mkSlot1Mem(FatMemValTy fatMem) const {
+  RawMemValTy mkSlot1Mem(MemValTy fatMem) const {
     assert(strct::isStructVal(fatMem.v()));
-    return strct::extractVal(fatMem.v(), 2);
+    return fatMem.getSlot1();
   }
 
-  /// \brief Creates a fat memory value from raw memory with default value for
-  /// fat
-  FatMemValTy mkFatMem(BaseMemValTy rawMem, BaseMemValTy slot0Mem,
-                       BaseMemValTy slot1Mem) const {
-    return strct::mk(rawMem, slot0Mem, slot1Mem);
+  /// \brief Creates a fat memory value from raw memory with given values
+  /// for fat
+  MemValTy mkFatMem(llvm::SmallVector<AnyMemValTy, 8> vals) const {
+    return MemValTy(vals);
   }
 
 public:
@@ -141,123 +303,122 @@ public:
   ~FatMemManager() = default;
 
   PtrSortTy ptrSort() const {
-    return sort::structTy(m_main.ptrSort(), m_ctx.alu().intTy(g_slotBitWidth),
-                          m_ctx.alu().intTy(g_slotBitWidth));
+    llvm::SmallVector<AnyPtrSortTy, 8> sorts;
+    sorts.push_back(m_main.ptrSort());
+    for (unsigned i=0; i < FatMemSlots; i++) {
+      sorts.push_back(m_ctx.alu().intTy(g_slotBitWidth));
+    }
+    return PtrSortTy(sorts);
   }
 
   /// \brief Allocates memory on the stack and returns a pointer to it
   /// \param align is requested alignment. If 0, default alignment is used
-  FatPtrTy salloc(unsigned bytes, uint32_t align = 0) {
+  PtrTy salloc(unsigned bytes, uint32_t align = 0) {
     auto e = m_main.salloc(bytes, align);
-    m_slot0.salloc(bytes, align);
-    m_slot1.salloc(bytes, align);
+    // TODO: remove commented lines
+    // m_slot0.salloc(bytes, align);
+    // m_slot1.salloc(bytes, align);
     return mkFatPtr(e);
   }
 
   /// \brief Allocates memory on the stack and returns a pointer to it
-  FatPtrTy salloc(Expr elmts, unsigned typeSz, uint32_t align = 0) {
+  PtrTy salloc(Expr elmts, unsigned typeSz, uint32_t align = 0) {
     auto e = m_main.salloc(elmts, typeSz, align);
-    m_slot0.salloc(elmts, typeSz, align);
-    m_slot1.salloc(elmts, typeSz, align);
+    // TODO: remove commented lines
+    // m_slot0.salloc(elmts, typeSz, align);
+    // m_slot1.salloc(elmts, typeSz, align);
     return mkFatPtr(e);
   }
 
   /// \brief Returns a pointer value for a given stack allocation
-  FatPtrTy mkStackPtr(unsigned offset) {
+  PtrTy mkStackPtr(unsigned offset) {
     return mkFatPtr(m_main.mkStackPtr(offset));
   }
 
   /// \brief Pointer to start of the heap
-  FatPtrTy brk0Ptr() { return mkFatPtr(m_main.brk0Ptr()); }
+  PtrTy brk0Ptr() { return mkFatPtr(m_main.brk0Ptr()); }
 
   /// \brief Allocates memory on the heap and returns a pointer to it
-  FatPtrTy halloc(unsigned _bytes, uint32_t align = 0) {
-    m_slot0.halloc(_bytes, align);
-    m_slot1.halloc(_bytes, align);
+  PtrTy halloc(unsigned _bytes, uint32_t align = 0) {
     return mkFatPtr(m_main.halloc(_bytes, align));
   }
 
   /// \brief Allocates memory on the heap and returns pointer to it
-  FatPtrTy halloc(Expr bytes, uint32_t align = 0) {
-    m_slot0.halloc(bytes, align);
-    m_slot1.halloc(bytes, align);
+  PtrTy halloc(Expr bytes, uint32_t align = 0) {
     return mkFatPtr(m_main.halloc(bytes, align));
   }
 
   /// \brief Allocates memory in global (data/bss) segment for given global
-  FatPtrTy galloc(const GlobalVariable &gv, uint32_t align = 0) {
-    m_slot0.galloc(gv, align);
-    m_slot1.galloc(gv, align);
+  PtrTy galloc(const GlobalVariable &gv, uint32_t align = 0) {
+    for (auto memMgr : m_slots) {
+      memMgr.galloc(gv, align);
+    }
     return mkFatPtr(m_main.galloc(gv, align));
   }
 
   /// \brief Allocates memory in code segment for the code of a given
   /// function
-  FatPtrTy falloc(const Function &fn) {
-    m_slot0.falloc(fn);
-    m_slot1.falloc(fn);
-    return mkFatPtr(m_main.falloc(fn));
-  }
+  PtrTy falloc(const Function &fn) { return mkFatPtr(m_main.falloc(fn)); }
 
   /// \brief Returns a function pointer value for a given function
-  FatPtrTy getPtrToFunction(const Function &F) {
-    m_slot0.getPtrToFunction(F);
-    m_slot1.getPtrToFunction(F);
+  PtrTy getPtrToFunction(const Function &F) {
     return mkFatPtr(m_main.getPtrToFunction(F));
   }
 
   /// \brief Returns a pointer to a global variable
-  FatPtrTy getPtrToGlobalVariable(const GlobalVariable &gv) {
-    m_slot0.getPtrToGlobalVariable(gv);
-    m_slot1.getPtrToGlobalVariable(gv);
+  PtrTy getPtrToGlobalVariable(const GlobalVariable &gv) {
     return mkFatPtr(m_main.getPtrToGlobalVariable(gv));
   }
 
   /// \brief Initialize memory used by the global variable
   void initGlobalVariable(const GlobalVariable &gv) const {
     m_main.initGlobalVariable(gv);
-    m_slot0.initGlobalVariable(gv);
-    m_slot1.initGlobalVariable(gv);
   }
 
   /// \brief Creates a non-deterministic pointer that is aligned
   ///
   /// Top bits of the pointer are named by \p name and last \c log2(align)
   /// bits are set to zero
-  FatPtrTy mkAlignedPtr(Expr name, uint32_t align) const {
-    m_slot0.mkAlignedPtr(name, align);
-    m_slot1.mkAlignedPtr(name, align);
+  PtrTy mkAlignedPtr(Expr name, uint32_t align) const {
     return mkFatPtr(m_main.mkAlignedPtr(name, align));
   }
 
   /// \brief Returns sort of a pointer register for an instruction
-  Expr mkPtrRegisterSort(const Instruction &inst) const {
-    return sort::structTy(m_main.mkPtrRegisterSort(inst),
-                          m_ctx.alu().intTy(g_slotBitWidth),
-                          m_ctx.alu().intTy(g_slotBitWidth));
+  PtrSortTy mkPtrRegisterSort(const Instruction &inst) const {
+    llvm::SmallVector<AnyPtrSortTy, 8> sorts;
+    sorts.push_back(m_main.mkPtrRegisterSort(inst));
+    for (unsigned i = 0; i < FatMemSlots; i++) {
+      sorts.push_back(m_ctx.alu().intTy(g_slotBitWidth));
+    }
+    return PtrSortTy(sorts);
   }
 
   /// \brief Returns sort of a pointer register for a function pointer
   PtrSortTy mkPtrRegisterSort(const Function &fn) const { return ptrSort(); }
 
   /// \brief Returns sort of a pointer register for a global pointer
-  Expr mkPtrRegisterSort(const GlobalVariable &gv) const { return ptrSort(); }
+  PtrSortTy mkPtrRegisterSort(const GlobalVariable &gv) const {
+    return ptrSort();
+  }
 
   /// \brief Returns sort of memory-holding register for an instruction
-  Expr mkMemRegisterSort(const Instruction &inst) const {
-    return sort::structTy(m_main.mkMemRegisterSort(inst),
-                          m_slot0.mkMemRegisterSort(inst),
-                          m_slot1.mkMemRegisterSort(inst));
+  MemSortTy mkMemRegisterSort(const Instruction &inst) const {
+    llvm::SmallVector<AnyMemSortTy, 8> sorts;
+    sorts.push_back(m_main.mkMemRegisterSort(inst));
+    for (auto memMgr : m_slots) {
+      sorts.push_back(memMgr.mkMemRegisterSort(inst));
+    }
+    return MemSortTy(sorts);
   }
 
   /// \brief Returns a fresh aligned pointer value
-  FatPtrTy freshPtr() { return mkFatPtr(m_main.freshPtr()); }
+  PtrTy freshPtr() { return mkFatPtr(m_main.freshPtr()); }
 
   /// \brief Returns a null ptr
-  FatPtrTy nullPtr() const { return m_nullPtr; }
+  PtrTy nullPtr() const { return m_nullPtr; }
 
-  /// \brief Fixes the type of a havoced value to mach the representation used
-  /// by mem repr.
+  /// \brief Fixes the type of a havoced value to mach the representation
+  /// used by mem repr.
   ///
   /// \param sort
   /// \param val
@@ -268,8 +429,10 @@ public:
       llvm::SmallVector<Expr, 8> kids;
       assert(isOp<STRUCT_TY>(sort));
       assert(sort->arity() == val->arity());
-      for (unsigned i = 0, sz = val->arity(); i < sz; ++i)
-        kids.push_back(coerce(sort->arg(i), val->arg(i)));
+      assert(sort->arity() == 1 + FatMemSlots);
+      kids.push_back(m_main.coerce(sort->arg(0), val->arg(0)));
+      for (unsigned i = 1, sz = val->arity(); i < sz; ++i)
+        kids.push_back(m_slots[i - 1].coerce(sort->arg(i), val->arg(i)));
       return strct::mk(kids);
     }
 
@@ -283,34 +446,38 @@ public:
   /// \param[in] byteSz size of the integer in bytes
   /// \param[in] align known alignment of \p ptr
   /// \return symbolic value of the read integer
-  Expr loadIntFromMem(FatPtrTy ptr, FatMemValTy mem, unsigned byteSz,
+  Expr loadIntFromMem(PtrTy ptr, MemValTy mem, unsigned byteSz,
                       uint64_t align) {
-    return m_main.loadIntFromMem(mkRawPtr(ptr), mkRawMem(mem), byteSz, align);
+    return m_main.loadIntFromMem(mkMainPtr(ptr), mkMainMem(mem), byteSz, align);
   }
 
   /// \brief Loads a pointer stored in memory
   /// \sa loadIntFromMem
-  FatPtrTy loadPtrFromMem(FatPtrTy ptr, FatMemValTy mem, unsigned byteSz,
-                          uint64_t align) {
-    BaseMemValTy rawVal =
-        m_main.loadPtrFromMem(mkRawPtr(ptr), mkRawMem(mem), byteSz, align);
-    BaseMemValTy slot0Val = m_slot0.loadIntFromMem(
-        mkRawPtr(ptr), mkSlot0Mem(mem), g_slotByteWidth, align);
-    BaseMemValTy slot1Val = m_slot1.loadIntFromMem(
-        mkRawPtr(ptr), mkSlot1Mem(mem), g_slotByteWidth, align);
-    return mkFatPtr(rawVal, slot0Val, slot1Val);
+  PtrTy loadPtrFromMem(PtrTy ptr, MemValTy mem, unsigned byteSz,
+                       uint64_t align) {
+    llvm::SmallVector<AnyPtrTy, 8> ptrVals;
+
+    MainPtrTy rawVal =
+        m_main.loadPtrFromMem(mkMainPtr(ptr), mkMainMem(mem), byteSz, align);
+    ptrVals.push_back(rawVal);
+    RawPtrTy rawPtr = getAddressable(ptr);
+    for(unsigned i=1; i <= FatMemSlots; i++) {
+      auto slotVal = m_slots[i - 1].loadIntFromMem(rawPtr, mem.getSlot(i), g_slotByteWidth, align);
+      ptrVals.push_back(slotVal);
+    }
+    return mkFatPtr(ptrVals);
   }
 
   /// \brief Pointer addition with numeric offset
-  FatPtrTy ptrAdd(FatPtrTy ptr, int32_t _offset) const {
-    BasePtrTy rawPtr = m_main.ptrAdd(mkRawPtr(ptr), _offset);
-    return mkFatPtr(rawPtr, ptr);
+  PtrTy ptrAdd(PtrTy ptr, int32_t _offset) const {
+    MainPtrTy mainPtr = m_main.ptrAdd(mkMainPtr(ptr), _offset);
+    return updateFatPtr(mainPtr, ptr);
   }
 
   /// \brief Pointer addition with symbolic offset
-  FatPtrTy ptrAdd(FatPtrTy ptr, Expr offset) const {
-    BasePtrTy rawPtr = m_main.ptrAdd(mkRawPtr(ptr), offset);
-    return mkFatPtr(rawPtr, ptr);
+  PtrTy ptrAdd(PtrTy ptr, Expr offset) const {
+    MainPtrTy mainPtr = m_main.ptrAdd(mkMainPtr(ptr), offset);
+    return updateFatPtr(mainPtr, ptr);
   }
 
   /// \brief Stores an integer into memory
@@ -318,27 +485,34 @@ public:
   /// Returns an expression describing the state of memory in \c memReadReg
   /// after the store
   /// \sa loadIntFromMem
-  FatMemValTy storeIntToMem(Expr _val, FatPtrTy ptr, FatMemValTy mem,
-                            unsigned byteSz, uint64_t align) {
-    return mkFatMem(
-        m_main.storeIntToMem(_val, mkRawPtr(ptr), mkRawMem(mem), byteSz, align),
-        mkSlot0Mem(mem), mkSlot1Mem(mem));
+  MemValTy storeIntToMem(Expr _val, PtrTy ptr, MemValTy mem, unsigned byteSz,
+                         uint64_t align) {
+    llvm::SmallVector<AnyMemValTy, 8> memVals;
+    assert(!strct::isStructVal(_val));
+    memVals.push_back(m_main.storeIntToMem(_val, mkMainPtr(ptr), mkMainMem(mem),
+                                         byteSz, align));
+    for(unsigned i=1; i <= FatMemSlots; i++) {
+      memVals.push_back(mem.getSlot(i));
+    }
+    return mkFatMem(memVals);
   }
 
   /// \brief Stores a pointer into memory
   /// \sa storeIntToMem
-  FatMemValTy storePtrToMem(FatPtrTy val, FatPtrTy ptr, FatMemValTy mem,
-                            unsigned byteSz, uint64_t align) {
-    BaseMemValTy main = m_main.storePtrToMem(mkRawPtr(val), mkRawPtr(ptr),
-                                             mkRawMem(mem), byteSz, align);
-    BaseMemValTy slot0 =
-        m_slot0.storeIntToMem(getFatData(val, 0), mkRawPtr(ptr),
-                              mkSlot0Mem(mem), g_slotByteWidth, align);
-    BaseMemValTy slot1 =
-        m_slot1.storeIntToMem(getFatData(val, 1), mkRawPtr(ptr),
-                              mkSlot1Mem(mem), g_slotByteWidth, align);
-    auto res = mkFatMem(main, slot0, slot1);
-    return res;
+  MemValTy storePtrToMem(PtrTy val, PtrTy ptr, MemValTy mem, unsigned byteSz,
+                         uint64_t align) {
+    llvm::SmallVector<AnyMemValTy, 8> memVals;
+
+    MainMemValTy main = m_main.storePtrToMem(mkMainPtr(val), mkMainPtr(ptr),
+                                             mkMainMem(mem), byteSz, align);
+    memVals.push_back(main);
+    RawPtrTy rawPtr = getAddressable(ptr);
+    for(unsigned i=1; i <= FatMemSlots; i++) {
+      MainMemValTy slotVal = m_slots[i - 1].storeIntToMem(
+        val.getSlot(i), rawPtr, mem.getSlot(i), g_slotByteWidth, align);
+      memVals.push_back(slotVal);
+    }
+    return mkFatMem(memVals);
   }
 
   /// \brief Returns an expression corresponding to a load from memory
@@ -347,7 +521,7 @@ public:
   /// \param[in] memReg is the memory register being read
   /// \param[in] ty is the type of value being loaded
   /// \param[in] align is the known alignment of the load
-  Expr loadValueFromMem(FatPtrTy ptr, FatMemValTy mem, const llvm::Type &ty,
+  Expr loadValueFromMem(PtrTy ptr, MemValTy mem, const llvm::Type &ty,
                         uint64_t align) {
 
     const unsigned byteSz =
@@ -368,7 +542,7 @@ public:
       llvm_unreachable(nullptr);
       break;
     case Type::FixedVectorTyID:
-    case Type::ScalableVectorTyID:        
+    case Type::ScalableVectorTyID:
       errs() << "Error: load of fixed vectors is not supported\n";
       llvm_unreachable(nullptr);
       break;
@@ -387,15 +561,15 @@ public:
     return res;
   }
 
-  FatMemValTy storeValueToMem(Expr _val, FatPtrTy ptr, FatMemValTy memIn,
-                              const llvm::Type &ty, uint32_t align) {
+  MemValTy storeValueToMem(Expr _val, PtrTy ptr, MemValTy memIn,
+                           const llvm::Type &ty, uint32_t align) {
     assert(ptr.v());
     Expr val = _val;
     const unsigned byteSz =
         m_sem.getTD().getTypeStoreSize(const_cast<llvm::Type *>(&ty));
     // ExprFactory &efac = ptr.v()->efac();
 
-    FatMemValTy res(Expr(nullptr));
+    MemValTy res = MemValTy(Expr());
     switch (ty.getTypeID()) {
     case Type::IntegerTyID:
       if (ty.getScalarSizeInBits() < byteSz * 8) {
@@ -410,12 +584,12 @@ public:
       llvm_unreachable(nullptr);
       break;
     case Type::FixedVectorTyID:
-    case Type::ScalableVectorTyID:        
+    case Type::ScalableVectorTyID:
       errs() << "Error: store of vectors is not supported\n";
       llvm_unreachable(nullptr);
       break;
     case Type::PointerTyID:
-      res = storePtrToMem(val, ptr, memIn, byteSz, align);
+      res = storePtrToMem(PtrTy(val), ptr, memIn, byteSz, align);
       break;
     case Type::StructTyID:
       WARN << "Storing struct type " << ty << " is not supported\n";
@@ -431,125 +605,139 @@ public:
   }
 
   /// \brief Executes symbolic memset with a concrete length
-  FatMemValTy MemSet(FatPtrTy ptr, Expr _val, unsigned len, FatMemValTy mem,
-                     uint32_t align) {
-    return mkFatMem(
-        m_main.MemSet(mkRawPtr(ptr), _val, len, mkRawMem(mem), align),
-        mkSlot0Mem(mem), mkSlot1Mem(mem));
+  MemValTy MemSet(PtrTy ptr, Expr _val, unsigned len, MemValTy mem,
+                  uint32_t align) {
+    llvm::SmallVector<AnyMemValTy, 8> memVals;
+    memVals.push_back(m_main.MemSet(mkMainPtr(ptr), _val, len, mkMainMem(mem), align));
+    for(unsigned i=1; i <= FatMemSlots; i++) {
+      memVals.push_back(mem.getSlot(i));
+    }
+    return mkFatMem(memVals);
   }
 
-  FatMemValTy MemSet(FatPtrTy ptr, Expr _val, Expr len, FatMemValTy mem,
-                     uint32_t align) {
-    return mkFatMem(
-        m_main.MemSet(mkRawPtr(ptr), _val, len, mkRawMem(mem), align),
-        mkSlot0Mem(mem), mkSlot1Mem(mem));
-  }
-
-  /// \brief Executes symbolic memcpy with concrete length
-  FatMemValTy MemCpy(FatPtrTy dPtr, FatPtrTy sPtr, unsigned len,
-                     FatMemValTy memTrsfrRead, FatMemValTy memRead,
-                     uint32_t align) {
-    return mkFatMem(
-        m_main.MemCpy(mkRawPtr(dPtr), mkRawPtr(sPtr), len,
-                      mkRawMem(memTrsfrRead), mkRawMem(memRead), align),
-        m_slot0.MemCpy(mkRawPtr(dPtr), mkRawPtr(sPtr), len,
-                       mkSlot0Mem(memTrsfrRead), mkSlot0Mem(memRead), align),
-        m_slot1.MemCpy(mkRawPtr(dPtr), mkRawPtr(sPtr), len,
-                       mkSlot1Mem(memTrsfrRead), mkSlot1Mem(memRead), align));
+  MemValTy MemSet(PtrTy ptr, Expr _val, Expr len, MemValTy mem,
+                  uint32_t align) {
+    llvm::SmallVector<AnyMemValTy, 8> memVals;
+    memVals.push_back(m_main.MemSet(mkMainPtr(ptr), _val, len, mkMainMem(mem), align));
+    for(unsigned i=1; i <= FatMemSlots; i++) {
+      memVals.push_back(mem.getSlot(i));
+    }
+    return mkFatMem(memVals);
   }
 
   /// \brief Executes symbolic memcpy with concrete length
-  FatMemValTy MemCpy(FatPtrTy dPtr, FatPtrTy sPtr, Expr len,
-                     FatMemValTy memTrsfrRead, FatMemValTy memRead,
-                     uint32_t align) {
-    return mkFatMem(
-        m_main.MemCpy(mkRawPtr(dPtr), mkRawPtr(sPtr), len,
-                      mkRawMem(memTrsfrRead), mkRawMem(memRead), align),
-        m_slot0.MemCpy(mkRawPtr(dPtr), mkRawPtr(sPtr), len,
-                       mkSlot0Mem(memTrsfrRead), mkSlot0Mem(memRead), align),
-        m_slot1.MemCpy(mkRawPtr(dPtr), mkRawPtr(sPtr), len,
-                       mkSlot1Mem(memTrsfrRead), mkSlot1Mem(memRead), align));
+  MemValTy MemCpy(PtrTy dPtr, PtrTy sPtr, unsigned len, MemValTy memTrsfrRead,
+                  MemValTy memRead, uint32_t align) {
+    llvm::SmallVector<AnyMemValTy, 8> memVals;
+    memVals.push_back(m_main.MemCpy(mkMainPtr(dPtr), mkMainPtr(sPtr), len,
+                      mkMainMem(memTrsfrRead), mkMainMem(memRead), align));
+    RawPtrTy rawPtrDst = getAddressable(dPtr);
+    RawPtrTy rawPtrSrc = getAddressable(sPtr);
+    for(unsigned i=1; i <= FatMemSlots; i++) {
+      memVals.push_back(m_slots[i - 1].MemCpy(rawPtrDst, rawPtrSrc, len, memTrsfrRead.getSlot(i),
+                        memRead.getSlot(i), align));
+    }
+    return mkFatMem(memVals);
+  }
+
+  /// \brief Executes symbolic memcpy with concrete length
+  MemValTy MemCpy(PtrTy dPtr, PtrTy sPtr, Expr len, MemValTy memTrsfrRead,
+                  MemValTy memRead, uint32_t align) {
+    llvm::SmallVector<AnyMemValTy, 8> memVals;
+    memVals.push_back(m_main.MemCpy(mkMainPtr(dPtr), mkMainPtr(sPtr), len,
+                      mkMainMem(memTrsfrRead), mkMainMem(memRead), align));
+    RawPtrTy rawPtrDst = getAddressable(dPtr);
+    RawPtrTy rawPtrSrc = getAddressable(sPtr);
+    for(unsigned i=1; i <= FatMemSlots; i++) {
+      memVals.push_back(m_slots[i - 1].MemCpy(rawPtrDst, rawPtrSrc, len, memTrsfrRead.getSlot(i),
+                        memRead.getSlot(i), align));
+    }
+    return mkFatMem(memVals);
   }
 
   /// \brief Executes symbolic memcpy from physical memory with concrete
   /// length
-  FatMemValTy MemFill(FatPtrTy dPtr, char *sPtr, unsigned len, FatMemValTy mem,
-                      uint32_t align = 0) {
-    return mkFatMem(
-        m_main.MemFill(mkRawPtr(dPtr), sPtr, len, mkRawMem(mem), align),
-        mkSlot0Mem(mem), mkSlot1Mem(mem));
+  MemValTy MemFill(PtrTy dPtr, char *sPtr, unsigned len, MemValTy mem,
+                   uint32_t align = 0) {
+   llvm::SmallVector<AnyMemValTy, 8> memVals;
+    memVals.push_back(m_main.MemFill(mkMainPtr(dPtr), sPtr, len, mkMainMem(mem), align));
+    for(unsigned i=1; i <= FatMemSlots; i++) {
+      memVals.push_back(mem.getSlot(i));
+    }
+    return mkFatMem(memVals);
   }
 
   /// \brief Executes inttoptr conversion
-  FatPtrTy inttoptr(Expr intVal, const Type &intTy, const Type &ptrTy) const {
+  PtrTy inttoptr(Expr intVal, const Type &intTy, const Type &ptrTy) const {
     return mkFatPtr(m_main.inttoptr(intVal, intTy, ptrTy));
   }
 
   /// \brief Executes ptrtoint conversion. This only converts the raw ptr to
   /// int.
-  Expr ptrtoint(FatPtrTy ptr, const Type &ptrTy, const Type &intTy) const {
-    return m_main.ptrtoint(mkRawPtr(ptr), ptrTy, intTy);
+  Expr ptrtoint(PtrTy ptr, const Type &ptrTy, const Type &intTy) const {
+    return m_main.ptrtoint(mkMainPtr(ptr), ptrTy, intTy);
   }
 
-  Expr ptrUlt(FatPtrTy p1, FatPtrTy p2) const {
-    return m_main.ptrUlt(mkRawPtr(p1), mkRawPtr(p2));
+  Expr ptrUlt(PtrTy p1, PtrTy p2) const {
+    return m_main.ptrUlt(mkMainPtr(p1), mkMainPtr(p2));
   }
-  Expr ptrSlt(FatPtrTy p1, FatPtrTy p2) const {
-    return m_main.ptrSlt(mkRawPtr(p1), mkRawPtr(p2));
+  Expr ptrSlt(PtrTy p1, PtrTy p2) const {
+    return m_main.ptrSlt(mkMainPtr(p1), mkMainPtr(p2));
   }
-  Expr ptrUle(FatPtrTy p1, FatPtrTy p2) const {
-    return m_main.ptrUle(mkRawPtr(p1), mkRawPtr(p2));
+  Expr ptrUle(PtrTy p1, PtrTy p2) const {
+    return m_main.ptrUle(mkMainPtr(p1), mkMainPtr(p2));
   }
-  Expr ptrSle(FatPtrTy p1, FatPtrTy p2) const {
-    return m_main.ptrSle(mkRawPtr(p1), mkRawPtr(p2));
+  Expr ptrSle(PtrTy p1, PtrTy p2) const {
+    return m_main.ptrSle(mkMainPtr(p1), mkMainPtr(p2));
   }
-  Expr ptrUgt(FatPtrTy p1, FatPtrTy p2) const {
-    return m_main.ptrUgt(mkRawPtr(p1), mkRawPtr(p2));
+  Expr ptrUgt(PtrTy p1, PtrTy p2) const {
+    return m_main.ptrUgt(mkMainPtr(p1), mkMainPtr(p2));
   }
-  Expr ptrSgt(FatPtrTy p1, FatPtrTy p2) const {
-    return m_main.ptrSgt(mkRawPtr(p1), mkRawPtr(p2));
+  Expr ptrSgt(PtrTy p1, PtrTy p2) const {
+    return m_main.ptrSgt(mkMainPtr(p1), mkMainPtr(p2));
   }
-  Expr ptrUge(FatPtrTy p1, FatPtrTy p2) const {
-    return m_main.ptrUge(mkRawPtr(p1), mkRawPtr(p2));
+  Expr ptrUge(PtrTy p1, PtrTy p2) const {
+    return m_main.ptrUge(mkMainPtr(p1), mkMainPtr(p2));
   }
-  Expr ptrSge(FatPtrTy p1, FatPtrTy p2) const {
-    return m_main.ptrSge(mkRawPtr(p1), mkRawPtr(p2));
+  Expr ptrSge(PtrTy p1, PtrTy p2) const {
+    return m_main.ptrSge(mkMainPtr(p1), mkMainPtr(p2));
   }
 
   /// \brief Checks if two pointers are equal.
-  Expr ptrEq(FatPtrTy p1, FatPtrTy p2) const {
-    return m_main.ptrEq(mkRawPtr(p1), mkRawPtr(p2));
+  Expr ptrEq(PtrTy p1, PtrTy p2) const {
+    return m_main.ptrEq(mkMainPtr(p1), mkMainPtr(p2));
   }
-  Expr ptrNe(FatPtrTy p1, FatPtrTy p2) const {
-    return m_main.ptrNe(mkRawPtr(p1), mkRawPtr(p2));
+  Expr ptrNe(PtrTy p1, PtrTy p2) const {
+    return m_main.ptrNe(mkMainPtr(p1), mkMainPtr(p2));
   }
 
-  Expr ptrSub(FatPtrTy p1, FatPtrTy p2) const {
-    return m_main.ptrSub(mkRawPtr(p1), mkRawPtr(p2));
+  Expr ptrSub(PtrTy p1, PtrTy p2) const {
+    return m_main.ptrSub(mkMainPtr(p1), mkMainPtr(p2));
   }
 
   /// \brief Computes a pointer corresponding to the gep instruction
-  FatPtrTy gep(FatPtrTy ptr, gep_type_iterator it,
-               gep_type_iterator end) const {
+  PtrTy gep(PtrTy ptr, gep_type_iterator it, gep_type_iterator end) const {
     // Here the resultant pointer automatically gets the same slot(s) data
     // as the original. Therefore we don't require the client to manually
     // update slot(s) data after a gep call.
-    BasePtrTy rawPtr = m_main.gep(mkRawPtr(ptr), it, end);
-    return mkFatPtr(rawPtr, ptr);
+    MainPtrTy mainPtr = m_main.gep(ptr.getMain(), it, end);
+    return updateFatPtr(mainPtr, ptr);
   }
 
   /// \brief Called when a function is entered for the first time
   void onFunctionEntry(const Function &fn) {
     m_main.onFunctionEntry(fn);
-    m_slot0.onFunctionEntry(fn);
-    m_slot1.onFunctionEntry(fn);
+    for(auto memMgr : m_slots) {
+      memMgr.onFunctionEntry(fn);
+    }
   }
 
   /// \brief Called when a module entered for the first time
   void onModuleEntry(const Module &M) {
     m_main.onModuleEntry(M);
-    m_slot0.onModuleEntry(M);
-    m_slot1.onModuleEntry(M);
+    for(unsigned i=0; i < FatMemSlots; i++) {
+      m_slots[i].onModuleEntry(M);
+    }
   }
 
   /// \brief Debug helper
@@ -561,50 +749,132 @@ public:
     return m_main.getGlobalVariableInitValue(gv);
   }
 
-  FatMemValTy zeroedMemory() const {
-    return mkFatMem(m_main.zeroedMemory(), m_slot0.zeroedMemory(),
-                    m_slot1.zeroedMemory());
+  MemValTy zeroedMemory() const {
+    llvm::SmallVector<AnyMemValTy, 8> memVals;
+    memVals.push_back(m_main.zeroedMemory());
+    for(unsigned i=1; i <= FatMemSlots; i++) {
+      memVals.push_back(m_slots[i - 1].zeroedMemory());
+    }
+    return mkFatMem(memVals);
   }
 
-  Expr getFatData(FatPtrTy p, unsigned SlotIdx) {
-    assert(strct::isStructVal(p.v()));
-    assert(SlotIdx < g_maxFatSlots);
-    return strct::extractVal(p.v(), 1 + SlotIdx);
+  /// \brief get fat data in ith fat slot.
+  Expr getFatData(PtrTy p, unsigned SlotIdx) { return p.getSlot(1 + SlotIdx); }
+
+  PtrTy setFatData(PtrTy p, unsigned slotIdx, Expr data) {
+    assert(slotIdx < FatMemSlots);
+    llvm::SmallVector<AnyPtrTy, 8> ptrVals;
+    ptrVals.push_back(p.getMain());
+    for(unsigned i=1; i <= FatMemSlots; i++) {
+      if (slotIdx + 1 == i) {
+        ptrVals.push_back(data);
+      } else {
+        ptrVals.push_back(p.getSlot(i));
+      }
+    }
+    return mkFatPtr(ptrVals);
   }
 
-  FatPtrTy setFatData(FatPtrTy p, unsigned SlotIdx, Expr data) {
-    assert(strct::isStructVal(p.v()));
-    assert(SlotIdx < g_maxFatSlots);
-    return strct::insertVal(p.v(), 1 + SlotIdx, data);
+  RawPtrTy getAddressable(PtrTy p) const {
+    return m_main.getAddressable(p.getMain());
   }
-
-  RawPtrTy getAddressable(FatPtrTy p) const { return mkRawPtr(p); }
 
   bool isPtrTyVal(Expr e) const {
     // struct with raw ptr + fat slots
-    return e && strct::isStructVal(e) && e->arity() == (1 + g_maxFatSlots);
+    return e && strct::isStructVal(e) && e->arity() == (1 + FatMemSlots);
   }
 
   bool isMemVal(Expr e) const {
     // struct with raw ptr + fat slots
-    return e && strct::isStructVal(e) && e->arity() == (1 + g_maxFatSlots);
+    return e && strct::isStructVal(e) && e->arity() == (1 + FatMemSlots);
+  }
+
+  Expr isMetadataSet(MetadataKind kind, PtrTy ptr, MemValTy mem) {
+    // The width of the value will be wordSz
+    Expr val = getMetadata(kind, ptr, mem, 1);
+    if (val == Expr()) {
+      return m_ctx.alu().getTrue();
+    }
+    auto sentinel = m_ctx.alu().ui(1, getMetadataMemWordSzInBits());
+    return m_ctx.alu().doEq(val, sentinel, getMetadataMemWordSzInBits());
+  }
+
+  MemValTy memsetMetadata(MetadataKind kind, PtrTy ptr, unsigned int len,
+                          MemValTy memIn, unsigned int val) {
+    llvm::SmallVector<AnyMemValTy, 8> memVals;
+    memVals.push_back(m_main.memsetMetadata(kind, ptr.getMain(), len, memIn.getMain(), val));
+    for(unsigned i=1; i <= FatMemSlots; i++) {
+      memVals.push_back(memIn.getSlot(i));
+    }
+    return mkFatMem(memVals);
+  }
+
+  MemValTy memsetMetadata(MetadataKind kind, PtrTy ptr, Expr len,
+                          MemValTy memIn, unsigned int val) {
+    llvm::SmallVector<AnyMemValTy, 8> memVals;
+    memVals.push_back(m_main.memsetMetadata(kind, ptr.getMain(), len, memIn.getMain(), val));
+    for(unsigned i=1; i <= FatMemSlots; i++) {
+      memVals.push_back(memIn.getSlot(i));
+    }
+    return memVals;
+  }
+
+  Expr getMetadata(MetadataKind kind, PtrTy ptr, MemValTy memIn,
+                   unsigned int byteSz) {
+    return m_main.getMetadata(kind, ptr.getMain(), memIn.getMain(), byteSz);
+  }
+
+  unsigned int getMetadataMemWordSzInBits() {
+    return m_main.getMetadataMemWordSzInBits();
+  }
+
+  size_t getNumOfMetadataSlots() { return m_main.getNumOfMetadataSlots(); }
+  MemValTy setMetadata(MetadataKind kind, PtrTy ptr, MemValTy mem, Expr val) {
+    if (!m_ctx.isTrackingOn() && kind != MetadataKind::ALLOC) {
+      LOG("opsem.memtrack.verbose",
+          WARN << "Ignoring setMetadata();Memory tracking is off"
+               << "\n";);
+      return mem;
+    }
+    llvm::SmallVector<AnyMemValTy, 8> memVals;
+    auto mainOut = m_main.setMetadata(kind, ptr.getMain(), mem.getMain(), val);
+    memVals.push_back(mainOut);
+    for(unsigned i=1; i <= FatMemSlots; i++) {
+      memVals.push_back(mem.getSlot(i));
+    }
+    return mkFatMem(memVals);
+  }
+
+  Expr isDereferenceable(PtrTy p, Expr byteSz) {
+    return m_main.isDereferenceable(p.getMain(), byteSz);
   }
 };
 
-FatMemManager::FatMemManager(Bv2OpSem &sem, Bv2OpSemContext &ctx,
-                             unsigned ptrSz, unsigned wordSz, bool useLambdas)
+template <class T>
+FatMemManager<T>::FatMemManager(Bv2OpSem &sem, Bv2OpSemContext &ctx,
+                                unsigned ptrSz, unsigned wordSz,
+                                bool useLambdas)
     : MemManagerCore(sem, ctx, ptrSz, wordSz,
-                     false /* this is a nop since we delegate to RawMemMgr */),
+                     false /* this is a nop since we delegate to T MemMgr */),
+      m_fatMemBaseName("sea.fatmem"),
       m_main(sem, ctx, ptrSz, wordSz, useLambdas),
-      m_slot0(sem, ctx, ptrSz, g_slotByteWidth, useLambdas),
-      m_slot1(sem, ctx, ptrSz, g_slotByteWidth, useLambdas),
+      m_slots(FatMemSlots, RawMemManager(sem, ctx, ptrSz, g_slotByteWidth, useLambdas)),
       m_nullPtr(mkFatPtr(m_main.nullPtr())) {}
 
 OpSemMemManager *mkFatMemManager(Bv2OpSem &sem, Bv2OpSemContext &ctx,
                                  unsigned ptrSz, unsigned wordSz,
                                  bool useLambdas) {
-  return new OpSemMemManagerMixin<FatMemManager>(sem, ctx, ptrSz, wordSz,
-                                                 useLambdas);
+  return new OpSemMemManagerMixin<FatMemManager<RawMemManager>>(
+      sem, ctx, ptrSz, wordSz, useLambdas);
 }
+
+// FatMemManager with ExtraWide and Tracking components
+OpSemMemManager *mkFatMemEWWTManager(Bv2OpSem &sem, Bv2OpSemContext &ctx,
+                                     unsigned ptrSz, unsigned wordSz,
+                                     bool useLambdas) {
+  return new OpSemMemManagerMixin<FatMemManager<EWWTMemManager>>(
+      sem, ctx, ptrSz, wordSz, useLambdas);
+}
+
 } // namespace details
 } // namespace seahorn

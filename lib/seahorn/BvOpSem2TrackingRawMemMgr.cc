@@ -235,6 +235,7 @@ TrackingRawMemManager::MemValTy TrackingRawMemManager::storePtrToMem(
   auto c = hana::prepend(mem.tail(), rawVal);
   return MemValTy(c);
 }
+
 TrackingRawMemManager::MemValTy TrackingRawMemManager::storeIntToMem(
     Expr _val, TrackingRawMemManager::PtrTy ptr,
     TrackingRawMemManager::MemValTy mem, unsigned int byteSz, uint64_t align) {
@@ -350,7 +351,9 @@ Expr TrackingRawMemManager::coerce(Expr sort, Expr val) {
     auto c = hana::transform(
         hana::slice_c<hana::size_c<1>, TrackingMemoryTuple::GetTupleSize()>(
             hana::keys(m_submgrs)),
-        [&](auto key) { return hana::at_key(m_submgrs, key).zeroedMemory(); });
+        [&](auto key) {
+          // NOTE: For tracking memory, the metadata parts are havoc'ed to zero.
+          return hana::at_key(m_submgrs, key).zeroedMemory(); });
     auto r = hana::prepend(c, MAIN_MEM_MGR.coerce(sort->arg(0), val->arg(0)));
     BOOST_HANA_CONSTANT_ASSERT(hana::size(r) ==
                                TrackingMemoryTuple::GetTupleSize());

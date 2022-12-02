@@ -1,12 +1,14 @@
 #include "seahorn/BvOpSem2.hh"
 #include "BvOpSem2ExtraWideMemMgr.hh"
 #include "BvOpSem2RawMemMgr.hh"
-
 #include "llvm/Analysis/LazyValueInfo.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/CodeGen/IntrinsicLowering.h"
 #include "llvm/IR/DebugInfo.h"
 #include "llvm/IR/DebugLoc.h"
+#include "llvm/IR/InstIterator.h"
+#include "llvm/IR/Instructions.h"
+
 #include "llvm/IR/GetElementPtrTypeIterator.h"
 #include "llvm/IR/InlineAsm.h"
 #include "llvm/Support/CommandLine.h"
@@ -24,6 +26,7 @@
 
 #include "seahorn/Expr/ExprLlvm.hh"
 #include "seahorn/Expr/ExprOpBinder.hh"
+#include "seahorn/Expr/TypeChecker.hh"
 
 #include "BvOpSem2Context.hh"
 
@@ -175,6 +178,11 @@ static llvm::cl::opt<bool> UseLVIInferRng(
     "horn-bv2-lvi-rng",
     llvm::cl::desc("Use LVI (LazyValueInfo) to infer rng invariants"),
     llvm::cl::init(false));
+static llvm::cl::opt<bool>
+    UseOwnSem("horn-bv2-own-sem",
+              llvm::cl::desc("Interpret Ownership semantics during VCGen"),
+              llvm::cl::init(false));
+
 namespace {
 
 const Value *extractUniqueScalar(const CallBase &CB) {
@@ -477,8 +485,17 @@ public:
       }
       unsigned nElts = ogv.getValue().IntVal.getZExtValue();
       unsigned memSz = typeSz * nElts;
-      LOG("opsem",
-          errs() << "!3 Alloca of " << memSz << " bytes: " << I << "\n";);
+      LOG(
+          "opsem", auto dloc = I.getDebugLoc(); if (dloc) {
+            unsigned line = dloc.getLine();
+            unsigned col = dloc.getCol();
+            StringRef file = (*dloc).getFilename();
+            errs() << "!3 Alloca of " << memSz << " bytes: " << I << " ["
+                   << file << ":" << line << ":" << col << "]"
+                   << "\n";
+          } else {
+            errs() << "!3 Alloca of " << memSz << " bytes: " << I << "\n";
+          });
       addr = m_ctx.mem().salloc(memSz);
     } else {
       Expr nElts = lookup(*I.getOperand(0));
@@ -659,7 +676,30 @@ public:
         hana::make_pair(BOOST_HANA_STRING("sea.set_shadowmem"),
                         &OpSemVisitor::visitSetShadowMem),
         hana::make_pair(BOOST_HANA_STRING("sea.get_shadowmem"),
-                        &OpSemVisitor::visitGetShadowMem));
+                        &OpSemVisitor::visitGetShadowMem),
+        hana::make_pair(BOOST_HANA_STRING("sea.begin_unique"),
+                        &OpSemVisitor::visitBeginUnique),
+        hana::make_pair(BOOST_HANA_STRING("sea.end_unique"),
+                        &OpSemVisitor::visitEndUnique),
+        hana::make_pair(BOOST_HANA_STRING("sea.bor_mkbor"),
+                        &OpSemVisitor::visitBorMkBor),
+        hana::make_pair(BOOST_HANA_STRING("sea.bor_mksuc"),
+                        &OpSemVisitor::visitBorMkSuc),
+        hana::make_pair(BOOST_HANA_STRING("sea.bor_mem2reg"),
+                        &OpSemVisitor::visitBorMem2Reg),
+        hana::make_pair(BOOST_HANA_STRING("sea.mov_reg2mem"),
+                        &OpSemVisitor::visitMovReg2Mem),
+        hana::make_pair(BOOST_HANA_STRING("sea.die"), &OpSemVisitor::visitDie),
+        hana::make_pair(BOOST_HANA_STRING("sea.move"),
+                        &OpSemVisitor::visitMove),
+        hana::make_pair(BOOST_HANA_STRING("sea.mkown"),
+                        &OpSemVisitor::visitMkOwn),
+        hana::make_pair(BOOST_HANA_STRING("sea.mkshr"),
+                        &OpSemVisitor::visitMkShr),
+        hana::make_pair(BOOST_HANA_STRING("sea.set_fatptr_slot"),
+                        &OpSemVisitor::visitFatPointerInstr),
+        hana::make_pair(BOOST_HANA_STRING("sea.get_fatptr_slot"),
+                        &OpSemVisitor::visitFatPointerInstr));
 
     auto visitFunDecl = [&](StringRef candidate) {
       auto found = false;
@@ -978,6 +1018,50 @@ public:
     m_ctx.setMemWriteRegister(Expr());
   }
 
+  void visitMkOwn(CallBase &CB) {
+    Expr ptrIn = lookup(*CB.getOperand(0));
+    setValue(CB, ptrIn);
+  }
+  void visitMkShr(CallBase &CB) {
+    Expr ptrIn = lookup(*CB.getOperand(0));
+    setValue(CB, ptrIn);
+  }
+  void visitBeginUnique(CallBase &CB) {
+    Expr ptrIn = lookup(*CB.getOperand(0));
+    setValue(CB, ptrIn);
+  }
+
+  void visitEndUnique(CallBase &CB) {
+    Expr ptrIn = lookup(*CB.getOperand(0));
+    setValue(CB, ptrIn);
+  }
+
+  void visitBorMkBor(CallBase &CB) {
+    Expr ptrIn = lookup(*CB.getOperand(0));
+    setValue(CB, ptrIn);
+  }
+
+  void visitBorMkSuc(CallBase &CB) {
+    Expr ptrIn = lookup(*CB.getOperand(0));
+    setValue(CB, ptrIn);
+  }
+
+  void visitBorMem2Reg(CallBase &CB) {
+    Expr ptrIn = lookup(*CB.getOperand(0));
+    setValue(CB, ptrIn);
+  }
+
+  void visitMovReg2Mem(CallBase &CB) {
+    Expr ptrIn = lookup(*CB.getOperand(0));
+    setValue(CB, ptrIn);
+  }
+
+  void visitMove(CallBase &CB) {
+    Expr ptrIn = lookup(*CB.getOperand(0));
+    setValue(CB, ptrIn);
+  }
+
+  void visitDie(CallBase &CB) {}
   /// Report outcome of vacuity and incremental assertion checking
   void reportDoAssert(const char *tag, const Instruction &I, boost::tribool res,
                       bool expected) {
@@ -1138,6 +1222,27 @@ public:
     } else if (f->getName().equals("__sea_recover_pointer_hm")) {
       Expr fat_ptr = lookup(*CB.getOperand(0));
       setValue(CB, fat_ptr);
+    } else if (f->getName().equals("sea.set_fatptr_slot")) {
+      Expr ptr = lookup(*CB.getOperand(0));
+      Expr slot = lookup(*CB.getOperand(1));
+      if (!m_ctx.alu().isNum(slot)) {
+        LOG("opsem", ERR << "Fatptr slot should resolve to a number.");
+        assert(false);
+      }
+      size_t slotNum = m_ctx.alu().toNum(slot).get_ui();
+      Expr data = lookup(*CB.getOperand(2));
+      Expr res = m_ctx.mem().setFatData(ptr, slotNum, data);
+      setValue(CB, res);
+    } else if (f->getName().equals("sea.get_fatptr_slot")) {
+      Expr ptr = lookup(*CB.getOperand(0));
+      Expr slot = lookup(*CB.getOperand(1));
+      if (!m_ctx.alu().isNum(slot)) {
+        LOG("opsem", ERR << "Fatptr slot should resolve to a number.");
+        assert(false);
+      }
+      size_t slotNum = m_ctx.alu().toNum(slot).get_ui();
+      Expr res = m_ctx.mem().getFatData(ptr, slotNum);
+      setValue(CB, res);
     }
   }
 
@@ -1850,112 +1955,10 @@ public:
   void visitVAArgInst(VAArgInst &I) { llvm_unreachable(nullptr); }
 
   void visitExtractElementInst(ExtractElementInst &I) {
-    Expr val = executeExtractElementInst(I.getType(), *I.getOperand(0),
-                                         *I.getOperand(1), m_ctx);
-    setValue(I, val);
-  }
-
-  Expr executeExtractElementInst(Type *retTy, Value &vec, Value &idx,
-                                 Bv2OpSemContext &ctx) {
-    Expr res;
-
-    Expr valE = lookup(vec);
-    if (!valE)
-      return res;
-
-    const DataLayout &DL = m_sem.getDataLayout();
-
-    auto vecSz = DL.getTypeSizeInBits(vec.getType());
-
-    // -- this is also the size of vector element
-    auto retSz = DL.getTypeSizeInBits(retTy);
-    if (const ConstantInt *ci = dyn_cast<const ConstantInt>(&idx)) {
-
-      auto begin = retSz * ci->getZExtValue();
-      auto end = begin + retSz - 1;
-      res = m_ctx.alu().Extract({valE, vecSz}, begin, end);
-    } else {
-      LOG("opsem", WARN << "unsupported extractelement with non-constant index "
-                           "operand\n";);
-      llvm_unreachable("unsupported");
-    }
-
-    return res;
+    llvm_unreachable(nullptr);
   }
   void visitInsertElementInst(InsertElementInst &I) {
-    Expr val =
-        executeInsertElementInst(I.getType(), *I.getOperand(0),
-                                 *I.getOperand(1), *I.getOperand(2), m_ctx);
-    setValue(I, val);
-  }
-
-  Expr executeInsertElementInst(Type *retTy, Value &vecValue, Value &elmt,
-                                Value &idx, Bv2OpSemContext &ctx) {
-
-    Expr res;
-    Expr valE = lookup(vecValue);
-    Expr elmtE = lookup(elmt);
-    if (!valE || !elmtE)
-      return res;
-
-    const DataLayout &DL = m_sem.getDataLayout();
-    auto vecSz = DL.getTypeSizeInBits(vecValue.getType());
-    auto elmtSz = DL.getTypeSizeInBits(elmt.getType());
-
-    if (vecSz == elmtSz)
-      return elmtE;
-    assert(vecSz > elmtSz);
-    assert(vecSz % elmtSz == 0);
-
-    if (const ConstantInt *ci = dyn_cast<const ConstantInt>(&idx)) {
-      unsigned idxV = ci->getZExtValue();
-
-      // -- first bit
-      unsigned begin = idxV * elmtSz;
-      // -- last bit
-      unsigned end = begin + elmtSz - 1;
-
-      Expr suffix;
-      unsigned suffixSz = 0;
-      Expr prefix;
-      unsigned prefixSz = 0;
-
-      if (begin > 0) {
-        suffixSz = begin;
-        suffix = m_ctx.alu().Extract({valE, vecSz}, 0, begin - 1);
-      }
-      if (end < vecSz - 1) {
-        prefixSz = vecSz - 1 - end;
-        prefix = m_ctx.alu().Extract({valE, vecSz}, end + 1, vecSz - 1);
-      }
-
-      unsigned res_sz = 0;
-
-      if (suffixSz > 0) {
-        res = suffix;
-        res_sz += suffixSz;
-      }
-
-      if (res_sz) {
-        res = m_ctx.alu().Concat({elmtE, elmtSz}, {res, res_sz});
-        res_sz += elmtSz;
-      } else {
-        res = elmtE;
-        res_sz = elmtSz;
-      }
-
-      if (prefixSz > 0) {
-        res = m_ctx.alu().Concat({prefix, prefixSz}, {res, res_sz});
-        res_sz += prefixSz;
-        (void)res_sz;
-      }
-    } else {
-      LOG("opsem",
-          WARN
-              << "unsupported insertlement with non-constant index operand\n";);
-      llvm_unreachable("unsupported");
-    }
-    return res;
+    llvm_unreachable(nullptr);
   }
   void visitShuffleVectorInst(ShuffleVectorInst &I) {
     llvm_unreachable(nullptr);
@@ -2030,7 +2033,7 @@ public:
       return Expr();
     }
     // compute the offsets: begin and end of bits to extract from aggOp
-    const DataLayout &DL = m_sem.getDataLayout();
+    const DataLayout DL = m_sem.getDataLayout();
     Type *curTy = aggVal.getType();
     uint64_t begin = 0, end = 0;
     for (unsigned idx : indices) {
@@ -2081,12 +2084,6 @@ public:
   void visitInstruction(Instruction &I) {
     ERR << I;
     llvm_unreachable("No semantics to this instruction yet!");
-  }
-
-  void visitFreezeInst(FreezeInst &I) {
-    // operationally, freeze is a noop
-    Expr res = lookup(*I.getOperand(0));
-    setValue(I, res);
   }
 
   Expr executeSelectInst(Expr cond, Expr op0, Expr op1, Type *ty,
@@ -2436,12 +2433,10 @@ public:
   }
 
   Expr executeBitCastInst(const Value &op, Type *ty, Bv2OpSemContext &ctx) {
-    // -- opTy is destination type of the cast
     Type *opTy = op.getType();
 
-    if (opTy->getTypeID() == llvm::Type::TypeID::ScalableVectorTyID ||
-        ty->getTypeID() == llvm::Type::TypeID::ScalableVectorTyID)
-      llvm_unreachable("Scalable Vector types are unsupported");
+    if (opTy->isVectorTy() || ty->isVectorTy())
+      llvm_unreachable("Vector types are unsupported");
 
     Expr res = lookup(op);
     if (!res)
@@ -2455,7 +2450,7 @@ public:
         llvm_unreachable("bitcast from float to int is not supported");
       else if (opTy->isDoubleTy())
         llvm_unreachable("bitcast from double to int is not supported");
-      else if (opTy->isIntegerTy() || opTy->isVectorTy()) {
+      else if (opTy->isIntegerTy()) {
         return res;
       } else {
         llvm_unreachable("Invalid bitcast");
@@ -2470,11 +2465,6 @@ public:
         llvm_unreachable("bitcast to double not supported");
       else
         return res;
-    } else if (ty->isVectorTy()) {
-      if (opTy->isIntegerTy() || opTy->isVectorTy())
-        return res;
-      else
-        llvm_unreachable("bitcast from vector type is unsupported");
     }
 
     llvm_unreachable("Invalid bitcast");
@@ -2627,6 +2617,8 @@ Bv2OpSemContext::Bv2OpSemContext(Bv2OpSem &sem, SymStore &values,
     } else {
       mem = mkExtraWideMemManager(m_sem, *this, ptrSize, wordSize, UseLambdas);
     }
+  } else if (UseOwnSem) {
+    mem = mkFatMemEWWTManager(sem, *this, ptrSize, wordSize, UseLambdas);
   } else {
     mem = mkRawMemManager(m_sem, *this, ptrSize, wordSize, UseLambdas);
   }
@@ -2701,6 +2693,12 @@ Expr Bv2OpSemContext::simplify(Expr u) {
 }
 
 void Bv2OpSemContext::write(Expr v, Expr u) {
+  
+  #ifndef NDEBUG
+  TypeChecker tc;
+  auto ty = tc.typeOf(u);
+  assert(!(isOp<ERROR_TY>(ty) || isOp<ERRORBINDER>(ty)));
+  #endif
   if (shouldSimplify()) {
     u = simplify(u);
   }
@@ -2925,14 +2923,14 @@ Expr Bv2OpSemContext::mkRegister(const llvm::Instruction &inst) {
     // if tracking memory content, create array-valued register for
     // the pseudo-assignment
     else { //(true /*m_trackLvl >= MEM*/) {
+
       reg = bind::mkConst(v, mkMemRegisterSort(inst));
     }
   } else {
     const Type &ty = *inst.getType();
     switch (ty.getTypeID()) {
     case Type::IntegerTyID:
-    case Type::StructTyID:      // treat aggregate types in register as int
-    case Type::FixedVectorTyID: // treat fixed vectors in registers as int
+    case Type::StructTyID: // treat aggregate types in register as int
       reg = bind::mkConst(v, alu().intTy(m_sem.sizeInBits(ty)));
       break;
     case Type::PointerTyID:
@@ -3020,28 +3018,12 @@ Expr Bv2OpSemContext::getConstantValue(const llvm::Constant &c) {
       expr::mpz_class k = toMpz(gv.IntVal);
       return alu().num(k, m_sem.sizeInBits(c));
     }
-  } else if (c.getType()->isVectorTy()) {
-    ConstantExprEvaluator ce(m_sem.getDataLayout());
-    ce.setContext(*this);
-    auto GVO = ce.evaluate(&c);
-    if (GVO.hasValue()) {
-      auto &gv = GVO.getValue();
-      if (!gv.AggregateVal.empty()) {
-        auto vecBv0 = m_sem.vec(c.getType(), gv.AggregateVal, *this);
-        if (vecBv0.hasValue()) {
-          const APInt &vecBv = vecBv0.getValue();
-          expr::mpz_class k = toMpz(vecBv);
-          return alu().num(k, vecBv.getBitWidth());
-        }
-      }
-    }
-    LOG("opsem", WARN << "unhandled constant vector" << c;);
   } else if (c.getType()->isStructTy()) {
     ConstantExprEvaluator ce(m_sem.getDataLayout());
     ce.setContext(*this);
     auto GVO = ce.evaluate(&c);
     if (GVO.hasValue()) {
-      GenericValue &gv = GVO.getValue();
+      GenericValue gv = GVO.getValue();
       if (!gv.AggregateVal.empty()) {
         auto aggBvO = m_sem.agg(c.getType(), gv.AggregateVal, *this);
         if (aggBvO.hasValue()) {
@@ -3571,28 +3553,6 @@ Optional<APInt> Bv2OpSem::agg(Type *aggTy,
   return res;
 }
 
-Optional<APInt> Bv2OpSem::vec(Type *vecTy,
-                              const std::vector<GenericValue> &elements,
-                              details::Bv2OpSemContext &ctx) {
-
-  assert(vecTy->isVectorTy());
-  unsigned resBits = getDataLayout().getTypeSizeInBits(vecTy);
-  unsigned elemBits = getDataLayout().getTypeSizeInBits(vecTy->getScalarType());
-
-  APInt res(resBits, 0);
-
-  unsigned shiftBits = 0;
-  for (auto &gv : elements) {
-    APInt intVal = gv.IntVal.zext(resBits);
-    intVal <<= shiftBits;
-    res |= intVal;
-    shiftBits += elemBits;
-  }
-
-  errs() << "res is " << res << "\n";
-  return res;
-}
-
 void Bv2OpSem::initCrabAnalysis(const llvm::Module &M) {
   // Get seadsa -- pointer analysis
   auto &dsa_pass = m_pass.getAnalysis<seadsa::ShadowMemPass>().getShadowMem();
@@ -3691,6 +3651,7 @@ seahorn::details::Bv2OpSemContext &ctx(OpSemContext &_ctx) {
 }
 } // namespace details
 } // namespace seahorn
+
 namespace {
 // \brief Unwraps a const context
 const seahorn::details::Bv2OpSemContext &const_ctx(const OpSemContext &_ctx) {

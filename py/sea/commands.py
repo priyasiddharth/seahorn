@@ -404,6 +404,7 @@ class Seapp(sea.LimitedCmd):
         elif args.internalize:
             argv.append ('--klee-internalize')
         else:
+            argv.append('--pass-remarks-analysis=.*')
             if args.inline: argv.append ('--horn-inline-all')
             else:
                 if args.inline_only:
@@ -903,7 +904,7 @@ class Seaopt(sea.LimitedCmd):
         # this might create unwanted aliasing scenarios
         # for now, there is no option to undo this switch
         argv.append('--simplifycfg-sink-common=false')
-
+        argv.append('--pass-remarks-analysis=.*')
 
         if args.out_file is not None:
             argv.extend (['-o', args.out_file])
@@ -1068,6 +1069,7 @@ class Unroll(sea.LimitedCmd):
         argv = ['-f']
         if args.out_file is not None:
             argv.extend (['-o', args.out_file])
+        argv.append('--pass-remarks-analysis=.*')
 
         # cannonical loops
         argv.append ('-loop-simplify')

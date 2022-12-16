@@ -34,6 +34,10 @@ using namespace llvm;
 #define SEA_SET_SHADOWMEM "sea.set_shadowmem"
 #define SEA_GET_SHADOWMEM "sea.get_shadowmem"
 
+static llvm::cl::opt<bool> isDerefChecksIsAlloc(
+    "isderef-checks-isalloc",
+    llvm::cl::desc("Overload isderef intrinsic to also chec"), cl::init(false));
+
 SeaBuiltinsOp
 seahorn::SeaBuiltinsInfo::getSeaBuiltinOp(const llvm::CallBase &cb) const {
   using SBIOp = SeaBuiltinsOp;
@@ -298,7 +302,11 @@ Function *SeaBuiltinsInfo::mkIsDereferenceable(Module &M) {
                                   Type::getInt8PtrTy(C), IntPtrTy);
   auto *FN = dyn_cast<Function>(FC.getCallee());
   if (FN) {
-    FN->setOnlyAccessesInaccessibleMemory();
+    if (isDerefChecksIsAlloc) {
+      FN->setOnlyReadsMemory();
+    } else {
+      FN->setOnlyAccessesInaccessibleMemory();
+    }
     FN->setDoesNotThrow();
     FN->setDoesNotFreeMemory();
     FN->setDoesNotRecurse();

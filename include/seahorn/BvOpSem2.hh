@@ -52,7 +52,7 @@ class Bv2OpSem : public OperationalSemantics {
   std::unique_ptr<lvi_func_map_t> m_lvi_map;
 
   /// \brief owntype map used for analysis
-  using owntype_map_t = DenseMap<Expr, OwnType>;
+  using owntype_map_t = DenseMap<const Value *, OwnType>;
   std::unique_ptr<owntype_map_t> m_ownType_map;
 
   //// \brief crab's cfg builder manager
@@ -192,7 +192,7 @@ public:
   /// \brief Get the range of an instruction by LVI
   const llvm::ConstantRange getLVIInstRng(llvm::Instruction &I);
 
-  void inferOwnTypeFunction(const llvm::Function &F);
+  void inferOwnTypeOfPtr(const llvm::Function &F);
 
   OwnType getOwnType(const Instruction &inst);
 };

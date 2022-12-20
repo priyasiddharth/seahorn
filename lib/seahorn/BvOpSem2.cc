@@ -172,6 +172,10 @@ static llvm::cl::opt<bool> UseLVIInferRng(
     "horn-bv2-lvi-rng",
     llvm::cl::desc("Use LVI (LazyValueInfo) to infer rng invariants"),
     llvm::cl::init(false));
+static llvm::cl::opt<bool>
+    UseOwnSem("horn-bv2-own-sem",
+              llvm::cl::desc("Interpret Ownership semantics during VCGen"),
+              llvm::cl::init(false));
 namespace {
 
 const Value *extractUniqueScalar(const CallBase &CB) {
@@ -2673,7 +2677,9 @@ void Bv2OpSemContext::onFunctionEntry(const Function &fn) {
   if (UseLVIInferRng)
     m_sem.runLVIAnalysis(fn);
   mem().onFunctionEntry(fn);
-  m_sem.inferOwnTypeFunction(fn);
+  if (UseOwnSem) {
+    m_sem.inferOwnTypeOfPtr(fn);
+  }
 }
 void Bv2OpSemContext::onModuleEntry(const Module &M) {
   return mem().onModuleEntry(M);
@@ -3452,25 +3458,45 @@ const llvm::ConstantRange Bv2OpSem::getLVIInstRng(llvm::Instruction &I) {
   return llvm::ConstantRange::getFull(IntWidth);
 }
 
-void inferOwnTypeFunction(const llvm::Function &F) {
+void Bv2OpSem::inferOwnTypeOfPtr(const llvm::Function &F) {
   constexpr auto ownFnName = boost::hana::make_set("sea.mk_own");
-  constexpr auto bowFnName = boost::hana::make_set("sea.bor_mkbor");
+  constexpr auto borFnName = boost::hana::make_set("sea.bor_mkbor");
+  constexpr auto unqFnName = boost::hana::make_set(
+      "sea.begin_unique"); // sea.end_unique is default cased
+  constexpr auto inhFnName = boost::hana::make_set("sea.bor_mksuc");
 
-  constexpr auto typeInheritedFnName =
-      boost::hana::make_set("sea.mk_own", "sea.bor_mkbor", "sea.bor_mksuc",
-                            "sea.begin_unique", "sea.end_unique", "sea.die");
-  constexpr auto ownFnMap =
-      hana::make_map(hana::make_pair("sea.mk_own", OwnType::Own),
-                     hana::make_pair("sea.bor_mkbor", OwnType::Bor),
-                     // hana::make_pair("sea.bor_mksuc", OwnType::Own),
-                     hana::make_pair("sea.begin_unique", OwnType::Unq),
-                     hana::make_pair("sea.end_unique", OwnType::Shr));
+  // 1. iter thru all instr.
   for (auto &inst : instructions(F)) {
-    if (boost::hana::contains(ownFnName, inst.getFunction()->getName())) {
+    if (inst.getType()->isPointerTy()) {
+      // 2. if inst ptrdef then add <Inst_Value, Enum type>
+      if (isa<CallInst>(inst)) {
+        auto *ci = cast<CallInst>(&inst);
+        if (boost::hana::contains(ownFnName,
+                                  ci->getCalledFunction()->getName())) {
+          m_ownType_map->insert({ci, OwnType::Own});
+        } else if (boost::hana::contains(borFnName,
+                                         ci->getCalledFunction()->getName())) {
+          m_ownType_map->insert({ci, OwnType::Bor});
+        } else if (boost::hana::contains(unqFnName,
+                                         ci->getCalledFunction()->getName())) {
+          m_ownType_map->insert({ci, OwnType::Unq});
+        } else if (boost::hana::contains(inhFnName,
+                                         ci->getCalledFunction()->getName())) {
+          auto *op0 = ci->getCalledFunction()->getOperand(0);
+          auto it = m_ownType_map->find(op0);
+          assert(it != m_ownType_map->end());
+          auto ownType = it->second;
+          m_ownType_map->insert({ci, ownType});
+        } else {
+          m_ownType_map->insert({ci, OwnType::Shr});
+        }
+      } else {
+        // default is shared type
+        m_ownType_map->insert({&inst, OwnType::Shr});
+      }
     }
   }
 }
-
 } // namespace seahorn
 
 namespace seahorn {
@@ -3481,6 +3507,7 @@ seahorn::details::Bv2OpSemContext &ctx(OpSemContext &_ctx) {
 }
 } // namespace details
 } // namespace seahorn
+
 namespace {
 // \brief Unwraps a const context
 const seahorn::details::Bv2OpSemContext &const_ctx(const OpSemContext &_ctx) {

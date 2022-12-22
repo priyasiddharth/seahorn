@@ -665,7 +665,11 @@ public:
         hana::make_pair(BOOST_HANA_STRING("sea.set_shadowmem"),
                         &OpSemVisitor::visitSetShadowMem),
         hana::make_pair(BOOST_HANA_STRING("sea.get_shadowmem"),
-                        &OpSemVisitor::visitGetShadowMem));
+                        &OpSemVisitor::visitGetShadowMem),
+        hana::make_pair(BOOST_HANA_STRING("sea.begin_unique"),
+                        &OpSemVisitor::visitBeginUnique),
+        hana::make_pair(BOOST_HANA_STRING("sea.end_unique"),
+                        &OpSemVisitor::visitEndUnique));
 
     auto visitFunDecl = [&](StringRef candidate) {
       auto found = false;
@@ -984,6 +988,15 @@ public:
     m_ctx.setMemWriteRegister(Expr());
   }
 
+  void visitBeginUnique(CallBase &CB) {
+    Expr ptrIn = lookup(*CB.getOperand(0));
+    setValue(CB, ptrIn);
+  }
+
+  void visitEndUnique(CallBase &CB) {
+    Expr ptrIn = lookup(*CB.getOperand(0));
+    setValue(CB, ptrIn);
+  }
   /// Report outcome of vacuity and incremental assertion checking
   void reportDoAssert(const char *tag, const Instruction &I, boost::tribool res,
                       bool expected) {
@@ -2973,6 +2986,7 @@ Bv2OpSem::Bv2OpSem(ExprFactory &efac, Pass &pass, const DataLayout &dl,
       m_td(&dl) {
   m_canFail = pass.getAnalysisIfAvailable<CanFail>();
   m_lvi_map = UseLVIInferRng ? std::make_unique<lvi_func_map_t>() : nullptr;
+  m_ownType_map = UseOwnSem ? std::make_unique<owntype_map_t>() : nullptr;
   auto *p = pass.getAnalysisIfAvailable<TargetLibraryInfoWrapperPass>();
   if (p)
     m_tliWrapper = p;
@@ -3544,34 +3558,60 @@ void Bv2OpSem::inferOwnTypeOfPtr(const llvm::Function &F) {
   constexpr auto inhFnName = boost::hana::make_set("sea.bor_mksuc");
 
   // 1. iter thru all instr.
-  for (auto &inst : instructions(F)) {
-    if (inst.getType()->isPointerTy()) {
+  for (auto &curr_inst : instructions(F)) {
+    if (curr_inst.getType()->isPointerTy()) {
       // 2. if inst ptrdef then add <Inst_Value, Enum type>
+      auto inst = curr_inst.stripPointerCasts();
+      OwnType ownType = OwnType::Shr;
       if (isa<CallInst>(inst)) {
-        auto *ci = cast<CallInst>(&inst);
+        auto *ci = cast<CallInst>(inst);
         if (boost::hana::contains(ownFnName,
                                   ci->getCalledFunction()->getName())) {
-          m_ownType_map->insert({ci, OwnType::Own});
+          ownType = OwnType::Own;
         } else if (boost::hana::contains(borFnName,
                                          ci->getCalledFunction()->getName())) {
-          m_ownType_map->insert({ci, OwnType::Bor});
+          ownType = OwnType::Bor;
         } else if (boost::hana::contains(unqFnName,
                                          ci->getCalledFunction()->getName())) {
-          m_ownType_map->insert({ci, OwnType::Unq});
+          ownType = OwnType::Unq;
         } else if (boost::hana::contains(inhFnName,
                                          ci->getCalledFunction()->getName())) {
           auto *op0 = ci->getCalledFunction()->getOperand(0);
           auto it = m_ownType_map->find(op0);
           assert(it != m_ownType_map->end());
-          auto ownType = it->second;
-          m_ownType_map->insert({ci, ownType});
+          ownType = it->second;
         } else {
-          m_ownType_map->insert({ci, OwnType::Shr});
+          ownType = OwnType::Shr;
         }
+      } else if (isa<BitCastInst>(inst)) {
+        auto *bci = cast<BitCastInst>(inst);
+        auto *op0 = bci->getOperand(0);
+        auto it = m_ownType_map->find(op0);
+        assert(it != m_ownType_map->end());
+        ownType = it->second;
+      } else if (isa<SelectInst>(inst)) {
+        auto *si = cast<SelectInst>(inst);
+        auto *op0 = si->getOperand(0);
+        auto it = m_ownType_map->find(op0);
+        assert(it != m_ownType_map->end());
+        ownType = it->second;
+        // Invariant: Check that both operands of Select Inst
+        // have the same ownership type.
+        auto *op1 = si->getOperand(1);
+        auto it2 = m_ownType_map->find(op1);
+        assert(it2 != m_ownType_map->end());
+        auto ownType2 = it->second;
+        assert(ownType == ownType2);
+      } else if (isa<PHINode>(inst)) {
+        LOG("opsem", ERR << "OwnSem: PHINode processing implemented yet";);
+        assert(false);
       } else {
         // default is shared type
-        m_ownType_map->insert({&inst, OwnType::Shr});
+        ownType = OwnType::Shr;
       }
+      LOG("opsem.ownsem", INFO << "OwnSem TypeInfer: " << curr_inst << " : "
+                               << ownType._to_string(););
+      m_ownType_map->insert({&curr_inst, ownType});
     }
   }
 }

@@ -1,5 +1,8 @@
 #ifndef _SEAHORN__H_
 #define _SEAHORN__H_
+
+#include <seadsa/sea_dsa.h>
+
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -61,6 +64,21 @@ extern char sea_get_shadowmem(char, char *);
 #ifdef __cplusplus
 }
 #endif
+
+extern char *sea_begin_unique(char *);
+extern char *sea_end_unique(char *);
+
+#define SEA_BEGIN_UNIQUE(DST, SRC)                                             \
+  do {                                                                         \
+    (DST) = sea_begin_unique((char *)(SRC));                                   \
+    sea_dsa_alias((DST), (SRC));                                               \
+  } while (0)
+
+#define SEA_END_UNIQUE(DST, SRC)                                               \
+  do {                                                                         \
+    (DST) = sea_end_unique((char *)(SRC));                                     \
+    sea_dsa_alias((DST), (SRC));                                               \
+  } while (0)
 
 /* Convenience macros */
 #define assume __SEA_assume

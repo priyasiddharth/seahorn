@@ -2465,6 +2465,8 @@ Bv2OpSemContext::Bv2OpSemContext(Bv2OpSem &sem, SymStore &values,
     } else {
       mem = mkExtraWideMemManager(m_sem, *this, ptrSize, wordSize, UseLambdas);
     }
+  } else if (UseOwnSem) {
+    mem = mkFatMemEWWTManager(sem, *this, ptrSize, wordSize, UseLambdas);
   } else {
     mem = mkRawMemManager(m_sem, *this, ptrSize, wordSize, UseLambdas);
   }

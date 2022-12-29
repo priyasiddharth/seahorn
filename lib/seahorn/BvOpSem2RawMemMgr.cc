@@ -565,7 +565,7 @@ Expr RawMemManagerCore::loadValueFromMem(const PtrTy &ptr, const MemValTy &mem,
     llvm_unreachable(nullptr);
     break;
   case Type::FixedVectorTyID:
-  case Type::ScalableVectorTyID:      
+  case Type::ScalableVectorTyID:
     errs() << "Error: load of vectors is not supported\n";
     llvm_unreachable(nullptr);
     break;
@@ -608,7 +608,7 @@ RawMemManagerCore::storeValueToMem(Expr _val, PtrTy ptr, MemValTy mem,
     llvm_unreachable(nullptr);
     break;
   case Type::FixedVectorTyID:
-  case Type::ScalableVectorTyID:      
+  case Type::ScalableVectorTyID:
     errs() << "Error: store of vectors is not supported\n";
     llvm_unreachable(nullptr);
     break;
@@ -788,7 +788,7 @@ OpSemAllocator &RawMemManagerCore::getMAllocator() const {
 }
 bool RawMemManagerCore::ignoreAlignment() const { return m_ignoreAlignment; }
 
-PtrTy RawMemManagerCore::getAddressable(PtrTy p) { return p; }
+PtrTy RawMemManagerCore::getAddressable(PtrTy p) const { return p; }
 
 // An empty destructor is needed because the class uses unique_ptr of
 // forward declared types.

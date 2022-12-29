@@ -834,7 +834,7 @@ OpSemAllocator &RawMemManagerCore::getMAllocator() const {
 }
 bool RawMemManagerCore::ignoreAlignment() const { return m_ignoreAlignment; }
 
-PtrTy RawMemManagerCore::getAddressable(PtrTy p) { return p; }
+PtrTy RawMemManagerCore::getAddressable(PtrTy p) const { return p; }
 
 // An empty destructor is needed because the class uses unique_ptr of
 // forward declared types.

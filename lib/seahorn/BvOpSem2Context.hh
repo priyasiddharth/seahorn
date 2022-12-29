@@ -768,6 +768,8 @@ public:
   virtual Expr getRawMem(Expr p) = 0;
 
   virtual size_t getNumOfMetadataSlots() = 0;
+
+  virtual Expr getAddressable(PtrTy p) const = 0;
 };
 
 OpSemMemManager *mkRawMemManager(Bv2OpSem &sem, Bv2OpSemContext &ctx,
@@ -785,6 +787,10 @@ OpSemMemManager *mkWideMemManager(Bv2OpSem &sem, Bv2OpSemContext &ctx,
 OpSemMemManager *mkExtraWideMemManager(Bv2OpSem &sem, Bv2OpSemContext &ctx,
                                        unsigned ptrSz, unsigned wordSz,
                                        bool useLambdas = false);
+
+OpSemMemManager *mkFatMemEWWTManager(Bv2OpSem &sem, Bv2OpSemContext &ctx,
+                                     unsigned ptrSz, unsigned wordSz,
+                                     bool useLambdas = false);
 
 /// Evaluates constant expressions
 class ConstantExprEvaluator {

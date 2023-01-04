@@ -67,6 +67,8 @@ extern char sea_get_shadowmem(char, char *);
 
 extern char *sea_begin_unique(char *);
 extern char *sea_end_unique(char *);
+extern char *__sea_set_extptr_slot0_hm(char *ptr, char val);
+extern char __sea_get_extptr_slot0_hm(char *ptr);
 
 #define SEA_BEGIN_UNIQUE(DST, SRC)                                             \
   do {                                                                         \
@@ -77,6 +79,22 @@ extern char *sea_end_unique(char *);
 #define SEA_END_UNIQUE(DST, SRC)                                               \
   do {                                                                         \
     (DST) = sea_end_unique((char *)(SRC));                                     \
+    sea_dsa_alias((DST), (SRC));                                               \
+  } while (0)
+
+#define SEA_LOAD_CACHE_AND_BEGIN_UNIQUE(DST, SRC, VAL)                         \
+  do {                                                                         \
+    char *intmd = __sea_set_extptr_slot0_hm((char *)SRC, (char)VAL);           \
+    sea_dsa_alias(intmd, SRC);                                                 \
+    (DST) = sea_begin_unique((char *)intmd);                                   \
+    sea_dsa_alias((DST), (intmd));                                             \
+  } while (0)
+
+#define SEA_UNLOAD_CACHE_AND_END_UNIQUE(DST, SRC, DSTADDRESS, DSTLEN)          \
+  do {                                                                         \
+    char val = __sea_get_extptr_slot0_hm((char *)SRC);                         \
+    (DST) = sea_end_unique((char *)(SRC));                                     \
+    memset((char *)DSTADDRESS, val, 1 /* FIXME: use DSTLEN */);                \
     sea_dsa_alias((DST), (SRC));                                               \
   } while (0)
 

@@ -457,9 +457,9 @@ Function *SeaBuiltinsInfo::mkFreeFn(Module &M) {
 Function *SeaBuiltinsInfo::mkMkOwn(Module &M) {
   // This consumes a shared ptr and returns an owned ptr
   auto &C = M.getContext();
-  auto FC = M.getOrInsertFunction(SEA_MK_OWN,
-                                  Type::getInt8PtrTy(C) /* return  */, 
-                                  Type::getInt8PtrTy(C) /* param */);
+  auto FC =
+      M.getOrInsertFunction(SEA_MK_OWN, Type::getInt8PtrTy(C) /* return  */,
+                            Type::getInt8PtrTy(C) /* param */);
   auto *FN = dyn_cast<Function>(FC.getCallee());
   if (FN) {
     FN->setDoesNotThrow();
@@ -474,9 +474,9 @@ Function *SeaBuiltinsInfo::mkMkOwn(Module &M) {
 Function *SeaBuiltinsInfo::mkBorMkBor(Module &M) {
   // This consumes an owned/borowed/uniqued ptr and returns a bowrrowed ptr
   auto &C = M.getContext();
-  auto FC = M.getOrInsertFunction(SEA_BOR_MKBOR,
-                                  Type::getInt8PtrTy(C) /* return  */, 
-                                  Type::getInt8PtrTy(C) /* param */);
+  auto FC =
+      M.getOrInsertFunction(SEA_BOR_MKBOR, Type::getInt8PtrTy(C) /* return  */,
+                            Type::getInt8PtrTy(C) /* param */);
   auto *FN = dyn_cast<Function>(FC.getCallee());
   if (FN) {
     FN->setDoesNotThrow();
@@ -492,9 +492,9 @@ Function *SeaBuiltinsInfo::mkBorMkSuc(Module &M) {
   // This consumes an KIND (owned/borowed/uniqued) ptr and returns a KIND ptr.
   // This ptr will not be used until ptr created by bor_mkbor dies.
   auto &C = M.getContext();
-  auto FC = M.getOrInsertFunction(SEA_BOR_MKSUC,
-                                  Type::getInt8PtrTy(C) /* return  */, 
-                                  Type::getInt8PtrTy(C) /* param */);
+  auto FC =
+      M.getOrInsertFunction(SEA_BOR_MKSUC, Type::getInt8PtrTy(C) /* return  */,
+                            Type::getInt8PtrTy(C) /* param */);
   auto *FN = dyn_cast<Function>(FC.getCallee());
   if (FN) {
     FN->setDoesNotThrow();
@@ -511,7 +511,7 @@ Function *SeaBuiltinsInfo::mkBeginUnique(Module &M) {
   // A unique ptr cannot escape to memory
   auto &C = M.getContext();
   auto FC = M.getOrInsertFunction(SEA_BEGIN_UNIQUE,
-                                  Type::getInt8PtrTy(C) /* return  */, 
+                                  Type::getInt8PtrTy(C) /* return  */,
                                   Type::getInt8PtrTy(C) /* param */);
   auto *FN = dyn_cast<Function>(FC.getCallee());
   if (FN) {
@@ -527,9 +527,9 @@ Function *SeaBuiltinsInfo::mkBeginUnique(Module &M) {
 Function *SeaBuiltinsInfo::mkEndUnique(Module &M) {
   // This consumes a unique ptr and returns a shared ptr
   auto &C = M.getContext();
-  auto FC = M.getOrInsertFunction(SEA_END_UNIQUE,
-                                  Type::getInt8PtrTy(C) /* return  */, 
-                                  Type::getInt8PtrTy(C) /* param */);
+  auto FC =
+      M.getOrInsertFunction(SEA_END_UNIQUE, Type::getInt8PtrTy(C) /* return  */,
+                            Type::getInt8PtrTy(C) /* param */);
   auto *FN = dyn_cast<Function>(FC.getCallee());
   if (FN) {
     FN->setDoesNotThrow();
@@ -544,8 +544,7 @@ Function *SeaBuiltinsInfo::mkEndUnique(Module &M) {
 Function *SeaBuiltinsInfo::mkDie(Module &M) {
   // This consumes a ptr and semantically marks it as dead.
   auto &C = M.getContext();
-  auto FC = M.getOrInsertFunction(SEA_BOR_MKBOR,
-                                  Type::getVoidTy(C) /* return  */, 
+  auto FC = M.getOrInsertFunction(SEA_DIE, Type::getVoidTy(C) /* return  */,
                                   Type::getInt8PtrTy(C) /* param */);
   auto *FN = dyn_cast<Function>(FC.getCallee());
   if (FN) {

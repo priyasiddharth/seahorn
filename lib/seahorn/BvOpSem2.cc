@@ -645,7 +645,12 @@ public:
         hana::make_pair(BOOST_HANA_STRING("sea.begin_unique"),
                         &OpSemVisitor::visitBeginUnique),
         hana::make_pair(BOOST_HANA_STRING("sea.end_unique"),
-                        &OpSemVisitor::visitEndUnique));
+                        &OpSemVisitor::visitEndUnique),
+        hana::make_pair(BOOST_HANA_STRING("sea.bor_mkbor"),
+                        &OpSemVisitor::visitBorMkBor),
+        hana::make_pair(BOOST_HANA_STRING("sea.bor_mksuc"),
+                        &OpSemVisitor::visitBorMkSuc),
+        hana::make_pair(BOOST_HANA_STRING("sea.die"), &OpSemVisitor::visitDie));
 
     auto visitFunDecl = [&](StringRef candidate) {
       auto found = false;
@@ -970,6 +975,18 @@ public:
     Expr ptrIn = lookup(*CB.getOperand(0));
     setValue(CB, ptrIn);
   }
+
+  void visitBorMkBor(CallBase &CB) {
+    Expr ptrIn = lookup(*CB.getOperand(0));
+    setValue(CB, ptrIn);
+  }
+
+  void visitBorMkSuc(CallBase &CB) {
+    Expr ptrIn = lookup(*CB.getOperand(0));
+    setValue(CB, ptrIn);
+  }
+
+  void visitDie(CallBase &CB) {}
   /// Report outcome of vacuity and incremental assertion checking
   void reportDoAssert(const char *tag, const Instruction &I, boost::tribool res,
                       bool expected) {
@@ -3479,7 +3496,10 @@ void Bv2OpSem::inferOwnTypeOfPtr(const llvm::Function &F) {
   constexpr auto borFnName = boost::hana::make_set("sea.bor_mkbor");
   constexpr auto unqFnName = boost::hana::make_set(
       "sea.begin_unique"); // sea.end_unique is default cased
-  constexpr auto inhFnName = boost::hana::make_set("sea.bor_mksuc");
+  constexpr auto inhFnName =
+      boost::hana::make_set("sea.bor_mksuc"
+                            ",__sea_set_extptr_slot0_hm",
+                            ",__sea_set_extptr_slot01_hm");
 
   // 1. iter thru all instr.
   for (auto &curr_inst : instructions(F)) {
@@ -3500,7 +3520,7 @@ void Bv2OpSem::inferOwnTypeOfPtr(const llvm::Function &F) {
           ownType = OwnType::Unq;
         } else if (boost::hana::contains(inhFnName,
                                          ci->getCalledFunction()->getName())) {
-          auto *op0 = ci->getCalledFunction()->getOperand(0);
+          auto *op0 = ci->getOperand(0);
           auto it = m_ownType_map->find(op0);
           assert(it != m_ownType_map->end());
           ownType = it->second;

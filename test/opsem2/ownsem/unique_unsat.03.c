@@ -1,4 +1,4 @@
-//; RUN: %sea "%s" --own-sem --horn-vcgen-use-ite --horn-vcgen-only-dataflow --horn-bmc-coi 2>&1 | OutputCheck %s
+//; RUN: %sea "%s" --own-sem 2>&1 | OutputCheck %s
 // CHECK: ^unsat$
 #include "seahorn/seahorn.h"
 #include <stdbool.h>
@@ -21,18 +21,20 @@ int main() {
   h1->valid = true;
   h2->val = 1;
   h2->valid = false;
-  Handle *h1u, *h11u, *h1s;
-  SEA_LOAD_CACHE_AND_BEGIN_UNIQUE(h1u, h1, h1->valid);
+  Handle *h1b, *h1b1, *h1d;
+  SEA_LOAD_CACHE_AND_BORROW(h1d, h1b, h1, h1->valid);
 
   // When writing to memory, also write to cache.
-  SEA_WRITE_CACHE(h11u, h1u, false);
-  h1u->valid = false;
+  SEA_WRITE_CACHE(h1b1, h1b, false);
+  h1b1->valid = false;
+
+  SEA_DIE(h1b1);
+
   // It is valid to read from cache instead of memory
   // since h11u is unique;
   bool v;
-  SEA_READ_CACHE(v, (char *)h11u);
+  SEA_READ_CACHE(v, (char *)h1d);
   sassert(v == false);
 
-  SEA_UNLOAD_CACHE_AND_END_UNIQUE(h1s, (char *)h1u, &h1s->valid, 1);
   return 0;
 }

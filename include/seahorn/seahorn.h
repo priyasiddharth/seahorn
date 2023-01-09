@@ -69,7 +69,12 @@ extern char *sea_begin_unique(char *);
 extern char *sea_end_unique(char *);
 extern char *__sea_set_extptr_slot0_hm(char *ptr, char val);
 extern char __sea_get_extptr_slot0_hm(char *ptr);
-
+extern char *__sea_set_extptr_slot1_hm(char *ptr, char val);
+extern char __sea_get_extptr_slot1_hm(char *ptr);
+extern char nd_char();
+extern char *sea_bor_mkbor(char *);
+extern char *sea_bor_mksuc(char *);
+extern void sea_die(char *);
 #define SEA_BEGIN_UNIQUE(DST, SRC)                                             \
   do {                                                                         \
     (DST) = sea_begin_unique((char *)(SRC));                                   \
@@ -90,12 +95,54 @@ extern char __sea_get_extptr_slot0_hm(char *ptr);
     sea_dsa_alias((DST), (intmd));                                             \
   } while (0)
 
+// TODO: make cache nd after unloading
 #define SEA_UNLOAD_CACHE_AND_END_UNIQUE(DST, SRC, DSTADDRESS, DSTLEN)          \
   do {                                                                         \
-    char val = __sea_get_extptr_slot0_hm((char *)SRC);                         \
+    char uniqval = __sea_get_extptr_slot0_hm((char *)SRC);                     \
     (DST) = sea_end_unique((char *)(SRC));                                     \
-    memset((char *)DSTADDRESS, val, 1 /* FIXME: use DSTLEN */);                \
+    memset((char *)DSTADDRESS, uniqval, 1 /* FIXME: use DSTLEN */);            \
     sea_dsa_alias((DST), (SRC));                                               \
+  } while (0)
+
+#define SEA_WRITE_CACHE(DST, SRC, VAL)                                         \
+  do {                                                                         \
+    (DST) = __sea_set_extptr_slot0_hm((char *)(SRC), (char)(VAL));             \
+    sea_dsa_alias((DST), (SRC));                                               \
+  } while (0)
+
+#define SEA_READ_CACHE(VAL, SRC)                                               \
+  do {                                                                         \
+    (VAL) = __sea_get_extptr_slot0_hm((char *)SRC);                            \
+  } while (0)
+
+#define SEA_BORROW(DST, BOR, SRC)                                              \
+  do {                                                                         \
+    char *bor_intmd0 = sea_bor_mkbor((char *)SRC);                             \
+    char *suc_intmd0 = sea_bor_mksuc((char *)SRC);                             \
+    char brval = __sea_get_extptr_slot0_hm((char *)SRC);                       \
+    char *bor_intmd1 = __sea_set_extptr_slot0_hm(bor_intmd0, brval);           \
+    char ndval = nd_char();                                                    \
+    (BOR) = __sea_set_extptr_slot1_hm(bor_intmd1, ndval);                      \
+    (DST) = __sea_set_extptr_slot0_hm(suc_intmd0, ndval);                      \
+    sea_dsa_alias((BOR), (SRC));                                               \
+    sea_dsa_alias((DST), (SRC));                                               \
+    /* TODO: remove if sea_dsa_alias is transitive */                          \
+    sea_dsa_alias((DST), (BOR));                                               \
+  } while (0)
+
+#define SEA_DIE(SRC)                                                           \
+  do {                                                                         \
+    char nd_retval = __sea_get_extptr_slot1_hm((char *)(SRC));                 \
+    char cacheval = __sea_get_extptr_slot0_hm((char *)(SRC));                  \
+    assume(nd_retval == cacheval);                                             \
+    sea_die((char *)(SRC));                                                    \
+  } while (0)
+
+#define SEA_LOAD_CACHE_AND_BORROW(DST, BOR, SRC, VAL)                          \
+  do {                                                                         \
+    char *intmd = __sea_set_extptr_slot0_hm((char *)(SRC), (char)(VAL));       \
+    sea_dsa_alias(intmd, (SRC));                                               \
+    SEA_BORROW((DST), (BOR), intmd);                                           \
   } while (0)
 
 /* Convenience macros */

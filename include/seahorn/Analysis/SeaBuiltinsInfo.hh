@@ -33,10 +33,13 @@ enum class SeaBuiltinsOp {
   GET_SHADOWMEM,      /* sea.get_shadowmem */
   MK_OWN,
   BOR_MKBOR,
+  BOR_OFFSET, /* sea.bor_ptr */
   BOR_MKSUC,
   BEGIN_UNIQUE,
   END_UNIQUE,
   DIE,
+  SET_FATPTR_SLOT,
+  GET_FATPTR_SLOT,
   UNKNOWN
 };
 
@@ -67,6 +70,9 @@ class SeaBuiltinsInfo {
   llvm::Function *mkBeginUnique(llvm::Module &M);
   llvm::Function *mkEndUnique(llvm::Module &M);
   llvm::Function *mkDie(llvm::Module &M);
+  llvm::Function *mkBorOffset(llvm::Module &M);
+  llvm::Function *mkSetFatPtrSlot(llvm::Module &M);
+  llvm::Function *mkGetFatPtrSlot(llvm::Module &M);
 
 public:
   SeaBuiltinsOp getSeaBuiltinOp(const llvm::CallBase &cb) const;

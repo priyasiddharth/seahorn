@@ -98,6 +98,10 @@ bool PromoteVerifierCalls::runOnModule(Module &M) {
   m_begin_unique = SBI.mkSeaBuiltinFn(SBIOp::BEGIN_UNIQUE, M);
   m_end_unique = SBI.mkSeaBuiltinFn(SBIOp::END_UNIQUE, M);
   m_die = SBI.mkSeaBuiltinFn(SBIOp::DIE, M);
+  m_bor_ptr = SBI.mkSeaBuiltinFn(SBIOp::BOR_OFFSET, M);
+  m_set_fatptr_slot = SBI.mkSeaBuiltinFn(SBIOp::SET_FATPTR_SLOT, M);
+  m_get_fatptr_slot = SBI.mkSeaBuiltinFn(SBIOp::GET_FATPTR_SLOT, M);
+
   // XXX DEPRECATED
   // Do not keep unused functions in llvm.used
 
@@ -171,6 +175,9 @@ bool PromoteVerifierCalls::runOnFunction(Function &F) {
       {"sea_begin_unique", {m_begin_unique, 1}},
       {"sea_end_unique", {m_end_unique, 1}},
       {"sea_die", {m_die, 1}},
+      {"sea_bor_ptr", {m_bor_ptr, 1}},
+      {"sea_set_fatptr_slot", {m_set_fatptr_slot, 3}},
+      {"sea_get_fatptr_slot", {m_get_fatptr_slot, 2}},
   };
 
   auto replaceFn = [](Instruction &I, std::pair<Function *, unsigned> f,

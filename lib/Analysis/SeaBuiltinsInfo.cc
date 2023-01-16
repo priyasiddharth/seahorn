@@ -34,13 +34,18 @@ using namespace llvm;
 #define SEA_SET_SHADOWMEM "sea.set_shadowmem"
 #define SEA_GET_SHADOWMEM "sea.get_shadowmem"
 
-// Instrinsics for Cache-at-ptr
+// Builtin for Cache-at-ptr
 #define SEA_MK_OWN "sea.mkown"
 #define SEA_BOR_MKBOR "sea.bor_mkbor"
+#define SEA_BOR_OFFSET "sea.bor_ptr"
 #define SEA_BOR_MKSUC "sea.bor_mksuc"
 #define SEA_BEGIN_UNIQUE "sea.begin_unique"
 #define SEA_END_UNIQUE "sea.end_unique"
 #define SEA_DIE "sea.die"
+
+// Builtin for fat ptr (slot0 and slot1 only)
+#define SEA_SET_FATPTR_SLOT "sea.set_fatptr_slot"
+#define SEA_GET_FATPTR_SLOT "sea.get_fatptr_slot"
 
 SeaBuiltinsOp
 seahorn::SeaBuiltinsInfo::getSeaBuiltinOp(const llvm::CallBase &cb) const {
@@ -77,6 +82,9 @@ seahorn::SeaBuiltinsInfo::getSeaBuiltinOp(const llvm::CallBase &cb) const {
       .Case(SEA_BEGIN_UNIQUE, SBIOp::BEGIN_UNIQUE)
       .Case(SEA_END_UNIQUE, SBIOp::END_UNIQUE)
       .Case(SEA_DIE, SBIOp::DIE)
+      .Case(SEA_BOR_OFFSET, SBIOp::BOR_OFFSET)
+      .Case(SEA_SET_FATPTR_SLOT, SBIOp::SET_FATPTR_SLOT)
+      .Case(SEA_GET_FATPTR_SLOT, SBIOp::GET_FATPTR_SLOT)
       .Default(SBIOp::UNKNOWN);
 }
 
@@ -136,8 +144,14 @@ llvm::Function *SeaBuiltinsInfo::mkSeaBuiltinFn(SeaBuiltinsOp op,
     return mkBeginUnique(M);
   case SBIOp::END_UNIQUE:
     return mkEndUnique(M);
+  case SBIOp::BOR_OFFSET:
+    return mkBorOffset(M);
   case SBIOp::DIE:
     return mkDie(M);
+  case SBIOp::SET_FATPTR_SLOT:
+    return mkSetFatPtrSlot(M);
+  case SBIOp::GET_FATPTR_SLOT:
+    return mkGetFatPtrSlot(M);
   }
   llvm_unreachable(nullptr);
 }
@@ -541,6 +555,23 @@ Function *SeaBuiltinsInfo::mkEndUnique(Module &M) {
   }
   return FN;
 }
+Function *SeaBuiltinsInfo::mkBorOffset(Module &M) {
+  // This consumes a unique ptr and returns a shared ptr
+  auto &C = M.getContext();
+  auto FC =
+      M.getOrInsertFunction(SEA_BOR_OFFSET, Type::getVoidTy(C) /* return */,
+                            Type::getInt8PtrTy(C) /* param 0 -- offset ptr */);
+  auto *FN = dyn_cast<Function>(FC.getCallee());
+  if (FN) {
+    FN->setDoesNotThrow();
+    FN->setDoesNotRecurse();
+    FN->setDoesNotFreeMemory();
+    FN->addParamAttr(0, Attribute::NoCapture);
+    // TODO: is the following too weak
+    FN->setDoesNotAccessMemory();
+  }
+  return FN;
+}
 Function *SeaBuiltinsInfo::mkDie(Module &M) {
   // This consumes a ptr and semantically marks it as dead.
   auto &C = M.getContext();
@@ -554,6 +585,44 @@ Function *SeaBuiltinsInfo::mkDie(Module &M) {
     FN->addParamAttr(0, Attribute::NoCapture);
     // TODO: is the following too weak
     FN->setDoesNotAccessMemory();
+  }
+  return FN;
+}
+Function *SeaBuiltinsInfo::mkGetFatPtrSlot(llvm::Module &M) {
+  auto &C = M.getContext();
+  auto FC = M.getOrInsertFunction(SEA_GET_FATPTR_SLOT,
+                                  Type::getInt64Ty(C),   // return type
+                                  Type::getInt8PtrTy(C), // address int8_t* //
+                                  Type::getInt8Ty(C)     // slot number 0..255
+
+  );
+  auto *FN = dyn_cast<Function>(FC.getCallee());
+  if (FN) {
+    FN->setDoesNotAccessMemory();
+    FN->setDoesNotThrow();
+    FN->setDoesNotFreeMemory();
+    FN->setDoesNotRecurse();
+    FN->addParamAttr(0, Attribute::NoCapture);
+  }
+  return FN;
+}
+
+Function *SeaBuiltinsInfo::mkSetFatPtrSlot(llvm::Module &M) {
+  auto &C = M.getContext();
+  auto FC =
+      M.getOrInsertFunction(SEA_SET_FATPTR_SLOT,
+                            Type::getInt8PtrTy(C), // return type is int8_t
+                            Type::getInt8PtrTy(C), // address int8_t*
+                            Type::getInt8Ty(C),    // slot number 0..255
+                            Type::getInt64Ty(C)    // value to set
+      );
+  auto *FN = dyn_cast<Function>(FC.getCallee());
+  if (FN) {
+    FN->setDoesNotAccessMemory();
+    FN->setDoesNotThrow();
+    FN->setDoesNotFreeMemory();
+    FN->setDoesNotRecurse();
+    FN->addParamAttr(0, Attribute::NoCapture);
   }
   return FN;
 }

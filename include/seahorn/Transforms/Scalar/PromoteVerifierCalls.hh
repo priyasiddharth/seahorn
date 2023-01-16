@@ -40,6 +40,9 @@ struct PromoteVerifierCalls : public ModulePass {
   Function *m_begin_unique;
   Function *m_end_unique;
   Function *m_die;
+  Function *m_bor_ptr;
+  Function *m_set_fatptr_slot;
+  Function *m_get_fatptr_slot;
 
   PromoteVerifierCalls() : ModulePass(ID) {}
 

@@ -28,22 +28,22 @@ int main() {
   // A correct non deterministic value is read from slot1
   // SEA_SET_FATPTR_SLOT1(h0, h00, 0xA);
   bool *h0b0_valid, *h0b1_valid;
-  SEA_BORROW_FIELD(h1, h0b0_valid, h0, offsetof(Handle, valid));
+  SEA_BORROW_OFFSET(h1, h0b0_valid, h0, offsetof(Handle, valid));
 
   // write to cache and mem
   SEA_WRITE_CACHE(h0b1_valid, h0b0_valid, true);
   *h0b1_valid = true;
 
   SEA_DIE(h0b1_valid);
-  uint64_t valToAssert;
+  bool valToAssert;
   SEA_READ_CACHE(valToAssert, (char *)h1);
-  sassert((bool)valToAssert == true);
+  sassert(valToAssert == true);
 
   Handle *h1b, *h1b1, *h1b2, *h1d;
   SEA_BORROW(h1d, h1b, h1);
 
   bool *h1b_valid, *h2b_valid;
-  SEA_BORROW_FIELD(h1b2, h1b_valid, h1b, offsetof(Handle, valid));
+  SEA_BORROW_OFFSET(h1b2, h1b_valid, h1b, offsetof(Handle, valid));
   // When writing to memory, also write to cache.
   SEA_WRITE_CACHE(h2b_valid, h1b_valid, false);
   *h2b_valid = false;

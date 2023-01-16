@@ -674,7 +674,13 @@ public:
                         &OpSemVisitor::visitBorMkBor),
         hana::make_pair(BOOST_HANA_STRING("sea.bor_mksuc"),
                         &OpSemVisitor::visitBorMkSuc),
-        hana::make_pair(BOOST_HANA_STRING("sea.die"), &OpSemVisitor::visitDie));
+        hana::make_pair(BOOST_HANA_STRING("sea.die"), &OpSemVisitor::visitDie),
+        hana::make_pair(BOOST_HANA_STRING("sea.mkown"),
+                        &OpSemVisitor::visitMkOwn),
+        hana::make_pair(BOOST_HANA_STRING("sea.set_fatptr_slot"),
+                        &OpSemVisitor::visitFatPointerInstr),
+        hana::make_pair(BOOST_HANA_STRING("sea.get_fatptr_slot"),
+                        &OpSemVisitor::visitFatPointerInstr));
 
     auto visitFunDecl = [&](StringRef candidate) {
       auto found = false;
@@ -993,6 +999,10 @@ public:
     m_ctx.setMemWriteRegister(Expr());
   }
 
+  void visitMkOwn(CallBase &CB) {
+    Expr ptrIn = lookup(*CB.getOperand(0));
+    setValue(CB, ptrIn);
+  }
   void visitBeginUnique(CallBase &CB) {
     Expr ptrIn = lookup(*CB.getOperand(0));
     setValue(CB, ptrIn);
@@ -1174,6 +1184,27 @@ public:
     } else if (f->getName().equals("__sea_recover_pointer_hm")) {
       Expr fat_ptr = lookup(*CB.getOperand(0));
       setValue(CB, fat_ptr);
+    } else if (f->getName().equals("sea.set_fatptr_slot")) {
+      Expr ptr = lookup(*CB.getOperand(0));
+      Expr slot = lookup(*CB.getOperand(1));
+      if (!m_ctx.alu().isNum(slot)) {
+        LOG("opsem", ERR << "Fatptr slot should resolve to a number.");
+        assert(false);
+      }
+      size_t slotNum = m_ctx.alu().toNum(slot).get_ui();
+      Expr data = lookup(*CB.getOperand(2));
+      Expr res = m_ctx.mem().setFatData(ptr, slotNum, data);
+      setValue(CB, res);
+    } else if (f->getName().equals("sea.get_fatptr_slot")) {
+      Expr ptr = lookup(*CB.getOperand(0));
+      Expr slot = lookup(*CB.getOperand(1));
+      if (!m_ctx.alu().isNum(slot)) {
+        LOG("opsem", ERR << "Fatptr slot should resolve to a number.");
+        assert(false);
+      }
+      size_t slotNum = m_ctx.alu().toNum(slot).get_ui();
+      Expr res = m_ctx.mem().getFatData(ptr, slotNum);
+      setValue(CB, res);
     }
   }
 
@@ -3570,14 +3601,13 @@ const llvm::ConstantRange Bv2OpSem::getLVIInstRng(llvm::Instruction &I) {
 }
 
 void Bv2OpSem::inferOwnTypeOfPtr(const llvm::Function &F) {
-  constexpr auto ownFnName = boost::hana::make_set("sea.mk_own");
+  constexpr auto ownFnName = boost::hana::make_set("sea.mkown");
   constexpr auto borFnName = boost::hana::make_set("sea.bor_mkbor");
   constexpr auto unqFnName = boost::hana::make_set(
       "sea.begin_unique"); // sea.end_unique is default cased
   constexpr auto inhFnName =
-      boost::hana::make_set("sea.bor_mksuc"
-                            ",__sea_set_extptr_slot0_hm",
-                            ",__sea_set_extptr_slot01_hm");
+      boost::hana::make_set("sea.bor_mksuc", "__sea_set_extptr_slot0_hm",
+                            "sea.set_fatptr_slot", "__sea_set_extptr_slot1_hm");
 
   // 1. iter thru all instr.
   for (auto &curr_inst : instructions(F)) {
@@ -3598,28 +3628,29 @@ void Bv2OpSem::inferOwnTypeOfPtr(const llvm::Function &F) {
           ownType = OwnType::Unq;
         } else if (boost::hana::contains(inhFnName,
                                          ci->getCalledFunction()->getName())) {
-          auto *op0 = ci->getOperand(0);
+          auto *op0 = ci->getOperand(0)->stripPointerCasts();
           auto it = m_ownType_map->find(op0);
           assert(it != m_ownType_map->end());
           ownType = it->second;
         } else {
           ownType = OwnType::Shr;
         }
-      } else if (isa<BitCastInst>(inst)) {
-        auto *bci = cast<BitCastInst>(inst);
-        auto *op0 = bci->getOperand(0);
-        auto it = m_ownType_map->find(op0);
-        assert(it != m_ownType_map->end());
-        ownType = it->second;
+      } else if (isa<GetElementPtrInst>(inst) &&
+                 isa<CallInst>(curr_inst.getPrevNonDebugInstruction()) &&
+                 cast<CallInst>(curr_inst.getPrevNonDebugInstruction())
+                     ->getCalledFunction()
+                     ->getName()
+                     .equals("sea.bor_ptr")) {
+        ownType = OwnType::Bor;
       } else if (isa<SelectInst>(inst)) {
         auto *si = cast<SelectInst>(inst);
-        auto *op0 = si->getOperand(0);
+        auto *op0 = si->getOperand(0)->stripPointerCasts();
         auto it = m_ownType_map->find(op0);
         assert(it != m_ownType_map->end());
         ownType = it->second;
         // Invariant: Check that both operands of Select Inst
         // have the same ownership type.
-        auto *op1 = si->getOperand(1);
+        auto *op1 = si->getOperand(1)->stripPointerCasts();
         auto it2 = m_ownType_map->find(op1);
         assert(it2 != m_ownType_map->end());
         auto ownType2 = it->second;

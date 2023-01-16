@@ -194,7 +194,7 @@ private:
     llvm::SmallVector<Expr, g_maxFatSlots + 1> kids;
     assert(fat.v()->arity() == g_maxFatSlots + 1);
     kids.push_back(mainPtr);
-    for (unsigned i = 1, sz = g_maxFatSlots; i < sz; ++i) {
+    for (unsigned i = 1, sz = g_maxFatSlots + 1; i < sz; ++i) {
       kids.push_back(fat.v()->arg(i));
     }
     return PtrTy(strct::mk(kids));
@@ -614,8 +614,8 @@ public:
     // Here the resultant pointer automatically gets the same slot(s) data
     // as the original. Therefore we don't require the client to manually
     // update slot(s) data after a gep call.
-    MainPtrTy rawPtr = m_main.gep(mkMainPtr(ptr), it, end);
-    return mkFatPtr(rawPtr, ptr);
+    MainPtrTy mainPtr = m_main.gep(ptr.getMain(), it, end);
+    return mkFatPtr(mainPtr, ptr);
   }
 
   /// \brief Called when a function is entered for the first time

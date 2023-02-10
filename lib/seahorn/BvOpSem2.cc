@@ -651,8 +651,12 @@ public:
         hana::make_pair(BOOST_HANA_STRING("sea.bor_mksuc"),
                         &OpSemVisitor::visitBorMkSuc),
         hana::make_pair(BOOST_HANA_STRING("sea.die"), &OpSemVisitor::visitDie),
+        hana::make_pair(BOOST_HANA_STRING("sea.move"),
+                        &OpSemVisitor::visitMove),
         hana::make_pair(BOOST_HANA_STRING("sea.mkown"),
                         &OpSemVisitor::visitMkOwn),
+        hana::make_pair(BOOST_HANA_STRING("sea.mkshr"),
+                        &OpSemVisitor::visitMkShr),
         hana::make_pair(BOOST_HANA_STRING("sea.set_fatptr_slot"),
                         &OpSemVisitor::visitFatPointerInstr),
         hana::make_pair(BOOST_HANA_STRING("sea.get_fatptr_slot"),
@@ -976,6 +980,10 @@ public:
     Expr ptrIn = lookup(*CB.getOperand(0));
     setValue(CB, ptrIn);
   }
+  void visitMkShr(CallBase &CB) {
+    Expr ptrIn = lookup(*CB.getOperand(0));
+    setValue(CB, ptrIn);
+  }
   void visitBeginUnique(CallBase &CB) {
     Expr ptrIn = lookup(*CB.getOperand(0));
     setValue(CB, ptrIn);
@@ -992,6 +1000,11 @@ public:
   }
 
   void visitBorMkSuc(CallBase &CB) {
+    Expr ptrIn = lookup(*CB.getOperand(0));
+    setValue(CB, ptrIn);
+  }
+
+  void visitMove(CallBase &CB) {
     Expr ptrIn = lookup(*CB.getOperand(0));
     setValue(CB, ptrIn);
   }
@@ -3553,33 +3566,61 @@ void Bv2OpSem::inferOwnTypeOfPtr(const llvm::Function &F) {
           auto *op0 = ci->getOperand(0)->stripPointerCasts();
           auto it = m_ownType_map->find(op0);
           assert(it != m_ownType_map->end());
+          // only inherit types if src is owned or borrowed
+          ASSERT_CODE(it->second == +OwnType::Bor ||
+                          it->second == +OwnType::Own,
+                      ERR << "Typecheck of " << curr_inst << " failed as "
+                          << *op0 << " is NOT borrowed/owned.\n";);
           ownType = it->second;
         } else {
           ownType = OwnType::Shr;
         }
       } else if (isa<GetElementPtrInst>(inst) &&
+                 curr_inst.getPrevNonDebugInstruction() &&
                  isa<CallInst>(curr_inst.getPrevNonDebugInstruction()) &&
                  cast<CallInst>(curr_inst.getPrevNonDebugInstruction())
                      ->getCalledFunction()
                      ->getName()
                      .equals("sea.bor_ptr")) {
+        auto *op0 =
+            cast<GetElementPtrInst>(inst)->getOperand(0)->stripPointerCasts();
+        auto it = m_ownType_map->find(op0);
+        assert(it != m_ownType_map->end());
+        auto srcOwnType = it->second;
+        // only borrowed or owned types can create a borrow_gep
+        ASSERT_CODE(srcOwnType == +OwnType::Bor || srcOwnType == +OwnType::Own,
+                    ERR << "Typecheck of " << curr_inst << " failed as " << *op0
+                        << " is NOT borrowed/owned.\n";);
+
         ownType = OwnType::Bor;
+      } else if (isa<PHINode>(inst)) {
+        auto *phi = cast<PHINode>(inst);
+        auto *op0 = phi->getIncomingValue(0)->stripPointerCasts();
+        auto it = m_ownType_map->find(op0);
+        assert(it != m_ownType_map->end());
+        ownType = it->second;
+        // Invariant: Check that two operands of PHI Inst
+        // have the same ownership type.
+        // TODO: What happens when more than two incoming?
+        auto *op1 = phi->getIncomingValue(1)->stripPointerCasts();
+        auto it2 = m_ownType_map->find(op1);
+        assert(it2 != m_ownType_map->end());
+        auto ownType2 = it->second;
+        assert(ownType == ownType2);
       } else if (isa<SelectInst>(inst)) {
         auto *si = cast<SelectInst>(inst);
         auto *op0 = si->getOperand(0)->stripPointerCasts();
         auto it = m_ownType_map->find(op0);
         assert(it != m_ownType_map->end());
         ownType = it->second;
-        // Invariant: Check that both operands of Select Inst
+        // Invariant: Check that two operands of Select Inst
         // have the same ownership type.
+        // TODO: What happens when more than two incoming?
         auto *op1 = si->getOperand(1)->stripPointerCasts();
         auto it2 = m_ownType_map->find(op1);
         assert(it2 != m_ownType_map->end());
         auto ownType2 = it->second;
         assert(ownType == ownType2);
-      } else if (isa<PHINode>(inst)) {
-        LOG("opsem", ERR << "OwnSem: PHINode processing implemented yet";);
-        assert(false);
       } else {
         // default is shared type
         ownType = OwnType::Shr;

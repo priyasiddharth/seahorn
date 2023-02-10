@@ -15,6 +15,14 @@ namespace seahorn {
     }                                                                          \
   } while (0)
 
+#define ASSERT_CODE(PRED, CODE)                                                \
+  do {                                                                         \
+    if (!(PRED)) {                                                             \
+      CODE;                                                                    \
+      assert(PRED);                                                            \
+    }                                                                          \
+  } while (0)
+
 extern bool SeaLogFlag;
 extern std::set<std::string> SeaLog;
 

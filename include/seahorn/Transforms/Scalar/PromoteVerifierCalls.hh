@@ -35,11 +35,13 @@ struct PromoteVerifierCalls : public ModulePass {
   Function *m_set_shadowmem;
   Function *m_get_shadowmem;
   Function *m_mkOwn;
+  Function *m_mkShr;
   Function *m_borMkBor;
   Function *m_borMkSuc;
   Function *m_begin_unique;
   Function *m_end_unique;
   Function *m_die;
+  Function *m_move;
   Function *m_bor_ptr;
   Function *m_set_fatptr_slot;
   Function *m_get_fatptr_slot;

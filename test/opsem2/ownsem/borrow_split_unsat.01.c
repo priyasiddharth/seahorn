@@ -39,8 +39,22 @@ int main() {
   SEA_READ_CACHE(valToAssert, (char *)h1);
   sassert(valToAssert == true);
 
+  Handle *h1s, *h1o1, *h1o;
   Handle *h1b, *h1b1, *h1b2, *h1d;
-  SEA_BORROW(h1d, h1b, h1);
+
+  bool cacheVal;
+  SEA_READ_CACHE(cacheVal, (char *)h1);
+  h1->valid = cacheVal;
+  SEA_MKSHR(h1s, h1);
+  h1s->val = 1;
+  h1s->valid = false;
+
+  SEA_MKOWN(h1o, h1s);
+  SEA_WRITE_CACHE(h1o1, h1o, h1o->valid);
+  SEA_READ_CACHE(valToAssert, (char *)h1o1);
+  sassert(valToAssert == false);
+
+  SEA_BORROW(h1d, h1b, h1o1);
 
   bool *h1b_valid, *h2b_valid;
   SEA_BORROW_OFFSET(h1b2, h1b_valid, h1b, offsetof(Handle, valid));

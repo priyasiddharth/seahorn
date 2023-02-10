@@ -16,8 +16,9 @@ namespace details {
 
 static const unsigned int g_slotBitWidth = 64;
 static const unsigned int g_slotByteWidth = g_slotBitWidth / 8;
-static const unsigned int g_undefSlot0 = 0xDEF0;
-static const unsigned int g_undefSlot1 = 0xDEF1;
+// TODO: remove these vars
+// static const unsigned int g_undefSlot0 = 0xDEF0;
+// static const unsigned int g_undefSlot1 = 0xDEF1;
 
 static const unsigned int g_maxFatSlots = 2;
 /// \brief provides Fat pointers and Fat memory to store them
@@ -29,6 +30,13 @@ public:
   using RawPtrTy = OpSemMemManager::PtrTy;
   using MainMemValTy = typename T::MemValTy;
   using RawMemValTy = OpSemMemManager::MemValTy;
+
+  /// \brief Source of unique identifiers
+  mutable unsigned m_id;
+
+  Expr m_freshSlot0BaseName;
+  Expr m_freshSlot1BaseName;
+
   /// PtrTy representation for this manager
   ///
   /// Currently internal representation is just an Expr
@@ -175,8 +183,16 @@ private:
 
   /// \brief Converts a raw ptr to fat ptr with default value for fat
   PtrTy mkFatPtr(MainPtrTy mainPtr) const {
-    return PtrTy(mainPtr, m_ctx.alu().ui(g_undefSlot0, g_slotBitWidth),
-                 m_ctx.alu().ui(g_undefSlot1, g_slotBitWidth));
+    // assign fresh (nd) values to slot0 and slot1
+    Expr freshSlot0Val = op::variant::variant(m_id, m_freshSlot0BaseName);
+    Expr freshSlot1Val = op::variant::variant(m_id, m_freshSlot1BaseName);
+    m_id++;
+    Expr slot0Val =
+        bind::mkConst(freshSlot0Val, m_ctx.alu().intTy(g_slotBitWidth));
+    Expr slot1Val =
+        bind::mkConst(freshSlot1Val, m_ctx.alu().intTy(g_slotBitWidth));
+
+    return PtrTy(mainPtr, slot0Val, slot1Val);
   }
 
   /// \brief Converts a raw ptr to fat ptr with default value for fat
@@ -731,6 +747,8 @@ FatMemManager<T>::FatMemManager(Bv2OpSem &sem, Bv2OpSemContext &ctx,
                                 bool useLambdas)
     : MemManagerCore(sem, ctx, ptrSz, wordSz,
                      false /* this is a nop since we delegate to T MemMgr */),
+      m_freshSlot0BaseName(mkTerm<std::string>("sea.fatmem.slot0", m_efac)),
+      m_freshSlot1BaseName(mkTerm<std::string>("sea.fatmem.slot1", m_efac)),
       m_main(sem, ctx, ptrSz, wordSz, useLambdas),
       m_slot0(sem, ctx, ptrSz, g_slotByteWidth, useLambdas),
       m_slot1(sem, ctx, ptrSz, g_slotByteWidth, useLambdas),

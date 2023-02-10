@@ -6,6 +6,7 @@
 #include <stdlib.h>
 
 extern char nd_char();
+extern bool nd_bool();
 
 typedef struct handle_t {
   unsigned val;
@@ -14,33 +15,51 @@ typedef struct handle_t {
 
 int main() {
   sea_tracking_on();
-  char *a, *b, *c;
 
-  Handle *h1, *h0, *h00, *h000;
-  Handle *h0000 = (Handle *)malloc(sizeof(Handle));
-  h0000->val = 0;
-  h0000->valid = false;
+  Handle *h1, *h00, *h0;
+  Handle *h000 = (Handle *)malloc(sizeof(Handle));
+  h000->val = 0;
+  h000->valid = false;
 
-  SEA_MKOWN(h000, h0000);
+  SEA_MKOWN(h00, h000);
 
-  SEA_WRITE_CACHE(h00, h000, false);
+  SEA_WRITE_CACHE(h0, h00, false);
+
   // No need to set fatptr_slot1
   // A correct non deterministic value is read from slot1
   // SEA_SET_FATPTR_SLOT1(h0, h00, 0xA);
   bool *h0b0_valid, *h0b1_valid;
-  SEA_BORROW_OFFSET(h1, h0b0_valid, h00, offsetof(Handle, valid));
+  SEA_BORROW_OFFSET(h1, h0b0_valid, h0, offsetof(Handle, valid));
 
   // write to cache and mem
   SEA_WRITE_CACHE(h0b1_valid, h0b0_valid, true);
   *h0b1_valid = true;
 
   SEA_DIE(h0b1_valid);
+
   bool valToAssert;
   SEA_READ_CACHE(valToAssert, (char *)h1);
-  sassert(valToAssert == true);
 
+  sassert(valToAssert == true);
+  Handle *h1s, *h1s1, *h1o;
   Handle *h1b, *h1b1, *h1b2, *h1d;
-  SEA_BORROW(h1d, h1b, h1);
+  if (nd_bool()) {
+    // non deterministically choose to have split-borrowed
+    // access on h1
+    bool cacheVal;
+    SEA_READ_CACHE(cacheVal, (char *)h1);
+    h1->valid = cacheVal; // write cache to mem
+    SEA_MKSHR(h1, h1);
+    h1->val = 1;
+    h1->valid = false;
+    SEA_MKOWN(h1o, h1);
+    SEA_WRITE_CACHE(h1o, h1o, h1o->valid);
+    SEA_READ_CACHE(valToAssert, (char *)h1o);
+    sassert(valToAssert == false);
+    SEA_BORROW(h1d, h1b, h1o);
+  } else {
+    SEA_BORROW(h1d, h1b, h1);
+  }
 
   bool *h1b_valid, *h2b_valid;
   SEA_BORROW_OFFSET(h1b2, h1b_valid, h1b, offsetof(Handle, valid));

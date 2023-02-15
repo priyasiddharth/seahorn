@@ -53,7 +53,6 @@ int main() {
   SEA_WRITE_CACHE(h1o1, h1o, h1o->valid);
   SEA_READ_CACHE(valToAssert, (char *)h1o1);
   sassert(valToAssert == false);
-
   SEA_BORROW(h1d, h1b, h1o1);
 
   bool *h1b_valid, *h2b_valid;
@@ -61,6 +60,7 @@ int main() {
   // When writing to memory, also write to cache.
   SEA_WRITE_CACHE(h2b_valid, h1b_valid, false);
   *h2b_valid = false;
+
   SEA_DIE(h2b_valid);
 
   // It is valid to read from cache instead of memory
@@ -68,6 +68,5 @@ int main() {
   bool v;
   SEA_READ_CACHE(v, (char *)h1d);
   sassert(v == false);
-
   return 0;
 }

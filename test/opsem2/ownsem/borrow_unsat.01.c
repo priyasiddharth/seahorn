@@ -23,7 +23,7 @@ int main() {
   h0000->valid = false;
 
   SEA_MKOWN(h000, h0000);
-
+  h000->valid = false;
   SEA_WRITE_CACHE(h00, h000, false);
   // No need to set fatptr_slot1
   // A correct non deterministic value is read from slot1

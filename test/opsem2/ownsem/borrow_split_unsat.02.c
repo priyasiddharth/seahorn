@@ -41,7 +41,7 @@ int main() {
   SEA_READ_CACHE(valToAssert, (char *)h1);
 
   sassert(valToAssert == true);
-  Handle *h1s, *h1s1, *h1o;
+  Handle *h1s, *h1s1, *h1o, *h1o1;
   Handle *h1b, *h1b1, *h1b2, *h1d;
   if (nd_bool()) {
     // non deterministically choose to have split-borrowed
@@ -49,14 +49,14 @@ int main() {
     bool cacheVal;
     SEA_READ_CACHE(cacheVal, (char *)h1);
     h1->valid = cacheVal; // write cache to mem
-    SEA_MKSHR(h1, h1);
-    h1->val = 1;
-    h1->valid = false;
-    SEA_MKOWN(h1o, h1);
-    SEA_WRITE_CACHE(h1o, h1o, h1o->valid);
-    SEA_READ_CACHE(valToAssert, (char *)h1o);
+    SEA_MKSHR(h1s1, h1);
+    h1s1->val = 1;
+    h1s1->valid = false;
+    SEA_MKOWN(h1o, h1s1);
+    SEA_WRITE_CACHE(h1o1, h1o, h1o->valid);
+    SEA_READ_CACHE(valToAssert, (char *)h1o1);
     sassert(valToAssert == false);
-    SEA_BORROW(h1d, h1b, h1o);
+    SEA_BORROW(h1d, h1b, h1o1);
   } else {
     SEA_BORROW(h1d, h1b, h1);
   }
@@ -72,7 +72,7 @@ int main() {
   // since h11u is unique;
   bool v;
   SEA_READ_CACHE(v, (char *)h1d);
-  sassert(v == false);
+  sassert(v == true);
 
   return 0;
 }

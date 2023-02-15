@@ -104,26 +104,30 @@ extern void sea_bor_ptr(char *);
 
 #define SEA_MKOWN(DST, SRC)                                                    \
   do {                                                                         \
-    (DST) = (typeof(DST))sea_mkown((char *)(SRC));                             \
-    sea_dsa_alias((DST), (SRC));                                               \
+    uint64_t nd_slot0 = nd_uint64t();                                          \
+    uint64_t nd_slot1 = nd_uint64t();                                          \
+    char *intmd0, *intmd1, *intmd2;                                            \
+    intmd0 = sea_mkown((char *)(SRC));                                         \
+    SEA_SET_FATPTR_SLOT0(intmd1, intmd0, nd_slot0);                            \
+    SEA_SET_FATPTR_SLOT1(intmd2, intmd1, nd_slot1);                            \
+    (DST) = (typeof(DST))intmd2;                                               \
   } while (0)
 
 #define SEA_MKSHR(DST, SRC)                                                    \
   do {                                                                         \
     (DST) = (typeof(DST))sea_mkshr((char *)(SRC));                             \
-    sea_dsa_alias((DST), (SRC));                                               \
   } while (0)
 
 #define SEA_BEGIN_UNIQUE(DST, SRC)                                             \
   do {                                                                         \
     (DST) = (typeof(DST))sea_begin_unique((char *)(SRC));                      \
-    sea_dsa_alias((DST), (SRC));                                               \
+    /* sea_dsa_alias((DST), (SRC)); */                                         \
   } while (0)
 
 #define SEA_END_UNIQUE(DST, SRC)                                               \
   do {                                                                         \
     (DST) = (typeof(DST))sea_end_unique((char *)(SRC));                        \
-    sea_dsa_alias((DST), (SRC));                                               \
+    /* sea_dsa_alias((DST), (SRC)); */                                         \
   } while (0)
 
 #define SEA_LOAD_CACHE_AND_BEGIN_UNIQUE(DST, SRC, VAL)                         \
@@ -131,7 +135,7 @@ extern void sea_bor_ptr(char *);
     char *intmd = __sea_set_extptr_slot0_hm((char *)SRC, VAL);                 \
     sea_dsa_alias(intmd, SRC);                                                 \
     (DST) = (typeof(DST))sea_begin_unique((char *)intmd);                      \
-    sea_dsa_alias((DST), (intmd));                                             \
+    /* sea_dsa_alias((DST), (intmd)); */                                       \
   } while (0)
 
 // TODO: make cache nd after unloading
@@ -140,13 +144,13 @@ extern void sea_bor_ptr(char *);
     char uniqval = __sea_get_extptr_slot0_hm((char *)SRC);                     \
     (DST) = (typeof(DST))sea_end_unique((char *)(SRC));                        \
     memset((char *)DSTADDRESS, uniqval, 1 /* FIXME: use DSTLEN */);            \
-    sea_dsa_alias((DST), (SRC));                                               \
+    /* sea_dsa_alias((DST), (SRC)); */                                         \
   } while (0)
 
 #define SEA_WRITE_CACHE(DST, SRC, VAL)                                         \
   do {                                                                         \
     SEA_SET_FATPTR_SLOT0((DST), (char *)(SRC), (VAL));                         \
-    sea_dsa_alias((DST), (SRC));                                               \
+    /* sea_dsa_alias((DST), (SRC)); */                                         \
   } while (0)
 
 #define SEA_READ_CACHE(VAL, SRC)                                               \
@@ -167,11 +171,10 @@ extern void sea_bor_ptr(char *);
     uint64_t ndval = nd_uint64t();                                             \
     assume(ndval == retval);                                                   \
     SEA_SET_FATPTR_SLOT1(BOR, bor_intmd1, ndval)                               \
-    SEA_SET_FATPTR_SLOT0(DST, suc_intmd0, ndval)                               \
-    sea_dsa_alias((BOR), (SRC));                                               \
-    sea_dsa_alias((DST), (SRC));                                               \
-    /* TODO: remove if sea_dsa_alias is transitive */                          \
-    sea_dsa_alias((DST), (BOR));                                               \
+    char *suc_intmd1;                                                          \
+    SEA_SET_FATPTR_SLOT0(suc_intmd1, suc_intmd0, ndval);                       \
+    uint64_t ndval_dst = nd_uint64t();                                         \
+    SEA_SET_FATPTR_SLOT1(DST, suc_intmd1, ndval_dst);                          \
   } while (0)
 
 #define SEA_DIE(SRC)                                                           \
@@ -187,7 +190,7 @@ extern void sea_bor_ptr(char *);
 #define SEA_LOAD_CACHE_AND_BORROW(DST, BOR, SRC, VAL)                          \
   do {                                                                         \
     char *intmd = __sea_set_extptr_slot0_hm((char *)(SRC), (VAL));             \
-    sea_dsa_alias(intmd, (SRC));                                               \
+    /* sea_dsa_alias(intmd, (SRC)); */                                         \
     SEA_BORROW((DST), (BOR), intmd);                                           \
   } while (0)
 
@@ -197,7 +200,7 @@ extern void sea_bor_ptr(char *);
     SEA_BORROW((DST), boroff_intmd0, SRC);                                     \
     sea_bor_ptr((char *)BOR_OFF);                                              \
     (BOR_OFF) = ((typeof(BOR_OFF))(boroff_intmd0)) + OFFSET;                   \
-    sea_dsa_alias((BOR_OFF), boroff_intmd0);                                   \
+    /* sea_dsa_alias((BOR_OFF), boroff_intmd0); */                             \
   } while (0)
 
 /* Convenience macros */

@@ -3017,8 +3017,9 @@ void Bv2OpSem::exec(const BasicBlock &bb,
   seahorn::details::OpSemVisitor v(ctx, *this);
   v.visitBasicBlock(const_cast<BasicBlock &>(bb));
   // skip PHI instructions
-  for (; isa<PHINode>(ctx.getCurrentInst()); ++ctx)
-    ;
+  for (; isa<PHINode>(ctx.getCurrentInst()); ++ctx) {
+    LOG("opsem", INFO << "Skipping PHI: " << ctx.getCurrentInst() << "\n";);
+  }
 
   while (intraStep(ctx)) {
     /* do nothing */;
@@ -3591,7 +3592,6 @@ void Bv2OpSem::inferOwnTypeOfPtr(const llvm::Function &F) {
         ASSERT_CODE(srcOwnType == +OwnType::Bor || srcOwnType == +OwnType::Own,
                     ERR << "Typecheck of " << curr_inst << " failed as " << *op0
                         << " is NOT borrowed/owned.\n";);
-
         ownType = OwnType::Bor;
       } else if (isa<PHINode>(inst)) {
         auto *phi = cast<PHINode>(inst);

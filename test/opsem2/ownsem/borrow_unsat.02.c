@@ -22,7 +22,7 @@ int main() {
   h0000->valid = false;
 
   SEA_MKOWN(h000, h0000);
-
+  h000->valid = false;
   SEA_WRITE_CACHE(h00, h000, false);
   // No need to set fatptr_slot1
   // A correct non deterministic value is read from slot1
@@ -33,7 +33,6 @@ int main() {
   // write to cache and mem
   SEA_WRITE_CACHE(h0b1_valid, h0b0_valid, true);
   *h0b1_valid = true;
-
   SEA_DIE(h0b1_valid);
   bool valToAssert;
   SEA_READ_CACHE(valToAssert, (char *)h1);
@@ -48,7 +47,6 @@ int main() {
   SEA_WRITE_CACHE(h2b_valid, h1b_valid, false);
   *h2b_valid = false;
   SEA_DIE(h2b_valid);
-
   // It is valid to read from cache instead of memory
   // since h11u is unique;
   bool v;

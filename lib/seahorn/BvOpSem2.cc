@@ -3043,9 +3043,8 @@ void Bv2OpSem::exec(const BasicBlock &bb,
   seahorn::details::OpSemVisitor v(ctx, *this);
   v.visitBasicBlock(const_cast<BasicBlock &>(bb));
   // skip PHI instructions
-  for (; isa<PHINode>(ctx.getCurrentInst()); ++ctx) {
-    LOG("opsem", INFO << "Skipping PHI: " << ctx.getCurrentInst() << "\n";);
-  }
+  for (; isa<PHINode>(ctx.getCurrentInst()); ++ctx)
+    ;
 
   while (intraStep(ctx)) {
     /* do nothing */;

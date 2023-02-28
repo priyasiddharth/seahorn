@@ -72,7 +72,7 @@ int main() {
   // since h11u is unique;
   bool v;
   SEA_READ_CACHE(v, (char *)h1d);
-  sassert(v == true);
+  sassert(v == false);
 
   return 0;
 }

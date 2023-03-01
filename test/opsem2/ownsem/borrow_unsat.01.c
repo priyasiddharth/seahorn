@@ -15,32 +15,26 @@ typedef struct handle_t {
 
 int main() {
   sea_tracking_on();
-  char *a, *b, *c;
+  Handle *h0 = (Handle *)malloc(sizeof(Handle));
+  h0->val = 0;
+  h0->valid = false;
 
-  Handle *h1, *h0, *h00, *h000;
-  Handle *h0000 = (Handle *)malloc(sizeof(Handle));
-  h0000->val = 0;
-  h0000->valid = false;
-
-  SEA_MKOWN(h000, h0000);
-  h000->valid = false;
-  SEA_WRITE_CACHE(h00, h000, false);
-  // No need to set fatptr_slot1
-  // A correct non deterministic value is read from slot1
-  // SEA_SET_FATPTR_SLOT1(h0, h00, 0xA);
-  bool *h0b0_valid, *h0b1_valid;
-  SEA_BORROW_OFFSET(h1, h0b0_valid, h00, offsetof(Handle, valid));
+  SEA_MKOWN(h0);
+  h0->valid = false;
+  SEA_WRITE_CACHE(h0, false);
+  bool *h0b0_valid;
+  SEA_BORROW_OFFSET(h0b0_valid, h0, offsetof(Handle, valid));
 
   pretendEscapeToMemory((char *)h0b0_valid);
 
   // write to cache and mem
-  SEA_WRITE_CACHE(h0b1_valid, h0b0_valid, true);
-  *h0b1_valid = true;
+  SEA_WRITE_CACHE(h0b0_valid, true);
+  *h0b0_valid = true;
 
-  SEA_DIE(h0b1_valid);
+  SEA_DIE(h0b0_valid);
 
   bool valToAssert;
-  SEA_READ_CACHE(valToAssert, (char *)h1);
-  sassert(valToAssert == true);
+  SEA_READ_CACHE(valToAssert, (char *)h0);
+  sassert(valToAssert == false);
   return 0;
 }

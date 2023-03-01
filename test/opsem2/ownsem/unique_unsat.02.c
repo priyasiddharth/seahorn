@@ -1,4 +1,5 @@
-//; RUN: %sea "%s" --own-sem --horn-vcgen-use-ite --horn-vcgen-only-dataflow --horn-bmc-coi 2>&1 | OutputCheck %s
+//; RUN: %sea "%s" --own-sem --horn-vcgen-use-ite --horn-vcgen-only-dataflow
+//--horn-bmc-coi 2>&1 | OutputCheck %s
 // CHECK: ^unsat$
 #include "seahorn/seahorn.h"
 #include <stdbool.h>
@@ -6,7 +7,6 @@
 
 extern char nd_char();
 
-extern char *__sea_copy_extptr_slots_hm(char *dst, char *src);
 typedef struct handle_t {
   unsigned val;
   bool valid;
@@ -14,25 +14,24 @@ typedef struct handle_t {
 
 int main() {
   sea_tracking_on();
-  char *a, *b, *c;
   Handle *h1 = (Handle *)malloc(sizeof(Handle));
   Handle *h2 = (Handle *)malloc(sizeof(Handle));
   h1->val = 0;
   h1->valid = true;
   h2->val = 1;
   h2->valid = false;
-  Handle *h1u, *h11u, *h1s;
-  SEA_LOAD_CACHE_AND_BEGIN_UNIQUE(h1u, h1, h1->valid);
+  SEA_BEGIN_UNIQUE_AND_LOAD_CACHE(h1, h1->valid);
 
   // When writing to memory, also write to cache.
-  SEA_WRITE_CACHE(h11u, h1u, false);
-  h1u->valid = false;
+  SEA_WRITE_CACHE(h1, false);
+  h1->valid = false;
   // It is valid to read from cache instead of memory
-  // since h11u is unique;
+  // since h1 is unique;
   bool v;
-  SEA_READ_CACHE(v, (char *)h11u);
+  char *r = (char *)h1;
+  SEA_READ_CACHE(v, r);
   sassert(v == false);
-
-  SEA_UNLOAD_CACHE_AND_END_UNIQUE(h1s, (char *)h1u, &h1s->valid, 1);
+  r = (char *)h1;
+  SEA_UNLOAD_CACHE_AND_END_UNIQUE(r, &h1->valid, 1);
   return 0;
 }

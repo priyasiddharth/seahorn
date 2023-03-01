@@ -6,15 +6,14 @@
 extern char *sea_begin_unique(char *);
 extern char *sea_end_unique(char *);
 extern char nd_char();
- 
+
 int main() {
   sea_tracking_on();
-  char *a, *b, *c;
-  a = malloc(1024);
-  SEA_BEGIN_UNIQUE(b, a);
-  *b = nd_char();
-  assume(*b < 5);
-  SEA_END_UNIQUE(c, b);
-  sassert(*c < 5);
+  char *a = malloc(1024);
+  SEA_BEGIN_UNIQUE(a);
+  *a = nd_char();
+  assume(*a < 5);
+  SEA_END_UNIQUE(a);
+  sassert(*a < 5);
   return 0;
 }

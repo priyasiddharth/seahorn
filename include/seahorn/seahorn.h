@@ -128,11 +128,10 @@ extern void sea_bor_ptr(char *);
     (SRC) = (typeof(SRC))sea_end_unique((char *)(SRC));                        \
   } while (0)
 
-#define SEA_LOAD_CACHE_AND_BEGIN_UNIQUE(SRC, VAL)                              \
+#define SEA_BEGIN_UNIQUE_AND_LOAD_CACHE(SRC, VAL)                              \
   do {                                                                         \
-    char *intmd = __sea_set_extptr_slot0_hm((char *)SRC, VAL);                 \
-    sea_dsa_alias(intmd, SRC);                                                 \
-    (SRC) = (typeof(SRC))sea_begin_unique((char *)intmd);                      \
+    (SRC) = (typeof(SRC))sea_begin_unique((char *)SRC);                        \
+    SEA_SET_FATPTR_SLOT0((SRC), VAL);                                          \
   } while (0)
 
 // TODO: make cache nd after unloading

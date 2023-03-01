@@ -3686,14 +3686,15 @@ void Bv2OpSem::inferOwnTypeOfPtr(const llvm::Function &F) {
         assert(ownType == ownType2);
       } else if (isa<SelectInst>(inst)) {
         auto *si = cast<SelectInst>(inst);
-        auto *op0 = si->getOperand(0)->stripPointerCasts();
+        // 1st operand is the comparision
+        auto *op0 = si->getOperand(1)->stripPointerCasts();
         auto it = m_ownType_map->find(op0);
         assert(it != m_ownType_map->end());
         ownType = it->second;
         // Invariant: Check that two operands of Select Inst
         // have the same ownership type.
         // TODO: What happens when more than two incoming?
-        auto *op1 = si->getOperand(1)->stripPointerCasts();
+        auto *op1 = si->getOperand(2)->stripPointerCasts();
         auto it2 = m_ownType_map->find(op1);
         assert(it2 != m_ownType_map->end());
         auto ownType2 = it->second;

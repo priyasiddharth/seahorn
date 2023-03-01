@@ -35,6 +35,6 @@ int main() {
 
   bool valToAssert;
   SEA_READ_CACHE(valToAssert, (char *)h0);
-  sassert(valToAssert == false);
+  sassert(valToAssert == true);
   return 0;
 }

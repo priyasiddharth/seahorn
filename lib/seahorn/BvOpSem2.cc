@@ -3581,7 +3581,8 @@ void Bv2OpSem::inferOwnTypeOfPtr(const llvm::Function &F) {
   constexpr auto inhFnName =
       boost::hana::make_set("sea.bor_mksuc", "__sea_set_extptr_slot0_hm",
                             "sea.set_fatptr_slot", "__sea_set_extptr_slot1_hm");
-
+  constexpr auto unqType =
+      boost::hana::make_set(+OwnType::Bor, +OwnType::Own, +OwnType::Unq);
   // 1. iter thru all instr.
   for (auto &curr_inst : instructions(F)) {
     if (curr_inst.getType()->isPointerTy()) {
@@ -3605,10 +3606,9 @@ void Bv2OpSem::inferOwnTypeOfPtr(const llvm::Function &F) {
           auto it = m_ownType_map->find(op0);
           assert(it != m_ownType_map->end());
           // only inherit types if src is owned or borrowed
-          ASSERT_CODE(it->second == +OwnType::Bor ||
-                          it->second == +OwnType::Own,
+          ASSERT_CODE(boost::hana::contains(unqType, it->second),
                       ERR << "Typecheck of " << curr_inst << " failed as "
-                          << *op0 << " is NOT borrowed/owned.\n";);
+                          << *op0 << " is NOT unique.\n";);
           ownType = it->second;
         } else {
           ownType = OwnType::Shr;
@@ -3624,11 +3624,10 @@ void Bv2OpSem::inferOwnTypeOfPtr(const llvm::Function &F) {
             cast<GetElementPtrInst>(inst)->getOperand(0)->stripPointerCasts();
         auto it = m_ownType_map->find(op0);
         assert(it != m_ownType_map->end());
-        auto srcOwnType = it->second;
         // only borrowed or owned types can create a borrow_gep
-        ASSERT_CODE(srcOwnType == +OwnType::Bor || srcOwnType == +OwnType::Own,
+        ASSERT_CODE(boost::hana::contains(unqType, it->second),
                     ERR << "Typecheck of " << curr_inst << " failed as " << *op0
-                        << " is NOT borrowed/owned.\n";);
+                        << " is NOT unique.\n";);
         ownType = OwnType::Bor;
       } else if (isa<PHINode>(inst)) {
         auto *phi = cast<PHINode>(inst);

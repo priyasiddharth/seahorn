@@ -38,7 +38,8 @@ using namespace llvm;
 #define SEA_MK_OWN "sea.mkown"
 #define SEA_MK_SHR "sea.mkshr"
 #define SEA_BOR_MKBOR "sea.bor_mkbor"
-#define SEA_BOR_OFFSET "sea.bor_ptr"
+#define SEA_BOR_MEM2REG "sea.bor_mem2reg"
+#define SEA_MOV_reg2mem "sea.mov_reg2mem"
 #define SEA_BOR_MKSUC "sea.bor_mksuc"
 #define SEA_BEGIN_UNIQUE "sea.begin_unique"
 #define SEA_END_UNIQUE "sea.end_unique"
@@ -80,14 +81,14 @@ seahorn::SeaBuiltinsInfo::getSeaBuiltinOp(const llvm::CallBase &cb) const {
       .Case(SEA_GET_SHADOWMEM, SBIOp::GET_SHADOWMEM)
       .Case(SEA_MK_OWN, SBIOp::MK_OWN)
       .Case(SEA_MK_SHR, SBIOp::MK_SHR)
-
       .Case(SEA_BOR_MKBOR, SBIOp::BOR_MKBOR)
       .Case(SEA_BOR_MKSUC, SBIOp::BOR_MKSUC)
       .Case(SEA_BEGIN_UNIQUE, SBIOp::BEGIN_UNIQUE)
       .Case(SEA_END_UNIQUE, SBIOp::END_UNIQUE)
       .Case(SEA_DIE, SBIOp::DIE)
       .Case(SEA_MOVE, SBIOp::MOVE)
-      .Case(SEA_BOR_OFFSET, SBIOp::BOR_OFFSET)
+      .Case(SEA_BOR_MEM2REG, SBIOp::BOR_MEM2REG)
+      .Case(SEA_MOV_REG2MEM, SBIOp::MOV_REG2MEM)
       .Case(SEA_SET_FATPTR_SLOT, SBIOp::SET_FATPTR_SLOT)
       .Case(SEA_GET_FATPTR_SLOT, SBIOp::GET_FATPTR_SLOT)
       .Default(SBIOp::UNKNOWN);
@@ -151,8 +152,10 @@ llvm::Function *SeaBuiltinsInfo::mkSeaBuiltinFn(SeaBuiltinsOp op,
     return mkBeginUnique(M);
   case SBIOp::END_UNIQUE:
     return mkEndUnique(M);
-  case SBIOp::BOR_OFFSET:
-    return mkBorOffset(M);
+  case SBIOp::BOR_MEM2REG:
+    return mkBorMem2Reg(M);
+  case SBIOp::MOV_REG2MEM:
+    return mkMovReg2Mem(M);
   case SBIOp::DIE:
     return mkDie(M);
   case SBIOp::MOVE:
@@ -581,11 +584,31 @@ Function *SeaBuiltinsInfo::mkEndUnique(Module &M) {
   }
   return FN;
 }
-Function *SeaBuiltinsInfo::mkBorOffset(Module &M) {
-  // This consumes a unique ptr and returns a shared ptr
+Function *SeaBuiltinsInfo::mkBorMem2Reg(Module &M) {
+  // This marks a ptr stored in memory as a
+  // borrowed ptr.
+  // To mark a subsequent load as a borrow load.
   auto &C = M.getContext();
   auto FC =
-      M.getOrInsertFunction(SEA_BOR_OFFSET, Type::getVoidTy(C) /* return */,
+      M.getOrInsertFunction(SEA_BOR_MEM2REG, Type::getInt8PtrTy(C) /* return */,
+                            Type::getInt8PtrTy(C) /* param 0 -- offset ptr */);
+  auto *FN = dyn_cast<Function>(FC.getCallee());
+  if (FN) {
+    FN->setDoesNotThrow();
+    FN->setDoesNotRecurse();
+    FN->setDoesNotFreeMemory();
+    FN->addParamAttr(0, Attribute::NoCapture);
+    // TODO: is the following too weak
+    FN->setDoesNotAccessMemory();
+  }
+  return FN;
+}
+Function *SeaBuiltinsInfo::mkMovReg2Mem(Module &M) {
+  // This marks a ptr in a register as to be moved to
+  // memory.
+  auto &C = M.getContext();
+  auto FC =
+      M.getOrInsertFunction(SEA_MOV_REG2MEM, Type::getInt8PtrTy(C) /* return */,
                             Type::getInt8PtrTy(C) /* param 0 -- offset ptr */);
   auto *FN = dyn_cast<Function>(FC.getCallee());
   if (FN) {

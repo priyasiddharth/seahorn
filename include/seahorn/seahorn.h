@@ -189,8 +189,15 @@ extern void sea_bor_ptr(char *);
   do {                                                                         \
     char *boroff_intmd0;                                                       \
     SEA_BORROW(boroff_intmd0, SRC);                                            \
-    sea_bor_ptr((char *)BOR_OFF);                                              \
     (BOR_OFF) = ((typeof(BOR_OFF))(boroff_intmd0)) + OFFSET;                   \
+  } while (0)
+
+#define SEA_BORROW_LOAD(BOR, PTR_TO_SRC_PTR)                                   \
+  do {                                                                         \
+    sea_bor_ptr((char *)(BOR));                                                \
+    typeof(BOR)(ptr) = *(PTR_TO_SRC_PTR);                                      \
+    SEA_BORROW(BOR, ptr);                                                      \
+    *(PTR_TO_SRC_PTR) = ptr;                                                   \
   } while (0)
 
 /* Convenience macros */

@@ -3605,7 +3605,7 @@ void Bv2OpSem::inferOwnTypeOfPtr(const llvm::Function &F) {
           auto *op0 = ci->getOperand(0)->stripPointerCasts();
           auto it = m_ownType_map->find(op0);
           assert(it != m_ownType_map->end());
-          // only inherit types if src is owned or borrowed
+          // only inherit types if src is  unique
           ASSERT_CODE(boost::hana::contains(unqType, it->second),
                       ERR << "Typecheck of " << curr_inst << " failed as "
                           << *op0 << " is NOT unique.\n";);
@@ -3613,22 +3613,13 @@ void Bv2OpSem::inferOwnTypeOfPtr(const llvm::Function &F) {
         } else {
           ownType = OwnType::Shr;
         }
-      } else if (isa<GetElementPtrInst>(inst) &&
-                 curr_inst.getPrevNonDebugInstruction() &&
-                 isa<CallInst>(curr_inst.getPrevNonDebugInstruction()) &&
-                 cast<CallInst>(curr_inst.getPrevNonDebugInstruction())
-                     ->getCalledFunction()
-                     ->getName()
-                     .equals("sea.bor_ptr")) {
+      } else if (isa<GetElementPtrInst>(inst)) {
+        // inherit the result for gep from source
         auto *op0 =
             cast<GetElementPtrInst>(inst)->getOperand(0)->stripPointerCasts();
         auto it = m_ownType_map->find(op0);
         assert(it != m_ownType_map->end());
-        // only borrowed or owned types can create a borrow_gep
-        ASSERT_CODE(boost::hana::contains(unqType, it->second),
-                    ERR << "Typecheck of " << curr_inst << " failed as " << *op0
-                        << " is NOT unique.\n";);
-        ownType = OwnType::Bor;
+        ownType = it->second;
       } else if (isa<PHINode>(inst)) {
         auto *phi = cast<PHINode>(inst);
         auto *op0 = phi->getIncomingValue(0)->stripPointerCasts();
@@ -3658,6 +3649,8 @@ void Bv2OpSem::inferOwnTypeOfPtr(const llvm::Function &F) {
         assert(it2 != m_ownType_map->end());
         auto ownType2 = it->second;
         assert(ownType == ownType2);
+      } else if (isa<LoadInst>(inst)) {
+        // TODO: add logic
       } else {
         // default is shared type
         ownType = OwnType::Shr;

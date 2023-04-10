@@ -73,14 +73,15 @@ extern char *__sea_set_extptr_slot1_hm(char *ptr, char val);
 extern char __sea_get_extptr_slot1_hm(char *ptr);
 extern char *sea_set_fatptr_slot(char *ptr, char slot, uint64_t val);
 extern uint64_t sea_get_fatptr_slot(char *ptr, char slot);
-extern char nd_char();
-extern uint64_t nd_uint64t();
+extern char nd_char(void);
+extern uint64_t nd_uint64t(void);
 extern char *sea_bor_mkbor(char *);
 extern char *sea_bor_mksuc(char *);
 extern void sea_die(char *);
 extern char *sea_mkown(char *);
 extern char *sea_mkshr(char *);
-extern void sea_bor_ptr(char *);
+extern char *sea_bor_mem2reg(char *);
+extern char *sea_mov_reg2mem(char *);
 
 #define SEA_SET_FATPTR_SLOT0(SRC, VAL)                                         \
   do {                                                                         \
@@ -194,8 +195,8 @@ extern void sea_bor_ptr(char *);
 
 #define SEA_BORROW_LOAD(BOR, PTR_TO_SRC_PTR)                                   \
   do {                                                                         \
-    sea_bor_ptr((char *)(BOR));                                                \
-    typeof(BOR)(ptr) = *(PTR_TO_SRC_PTR);                                      \
+    char *intmd_ptrptrto = sea_bor_mem2reg((char *)(PTR_TO_SRC_PTR));          \
+    typeof(BOR)(ptr) = *((typeof(PTR_TO_SRC_PTR))intmd_ptrptrto);              \
     SEA_BORROW(BOR, ptr);                                                      \
     *(PTR_TO_SRC_PTR) = ptr;                                                   \
   } while (0)

@@ -483,8 +483,17 @@ public:
       }
       unsigned nElts = ogv.getValue().IntVal.getZExtValue();
       unsigned memSz = typeSz * nElts;
-      LOG("opsem",
-          errs() << "!3 Alloca of " << memSz << " bytes: " << I << "\n";);
+      LOG(
+          "opsem", auto dloc = I.getDebugLoc(); if (dloc) {
+            unsigned line = dloc.getLine();
+            unsigned col = dloc.getCol();
+            StringRef file = (*dloc).getFilename();
+            errs() << "!3 Alloca of " << memSz << " bytes: " << I << " ["
+                   << file << ":" << line << ":" << col << "]"
+                   << "\n";
+          } else {
+            errs() << "!3 Alloca of " << memSz << " bytes: " << I << "\n";
+          });
       addr = m_ctx.mem().salloc(memSz);
     } else {
       Expr nElts = lookup(*I.getOperand(0));
@@ -674,6 +683,10 @@ public:
                         &OpSemVisitor::visitBorMkBor),
         hana::make_pair(BOOST_HANA_STRING("sea.bor_mksuc"),
                         &OpSemVisitor::visitBorMkSuc),
+        hana::make_pair(BOOST_HANA_STRING("sea.bor_mem2reg"),
+                        &OpSemVisitor::visitBorMem2Reg),
+        hana::make_pair(BOOST_HANA_STRING("sea.mov_reg2mem"),
+                        &OpSemVisitor::visitMovReg2Mem),
         hana::make_pair(BOOST_HANA_STRING("sea.die"), &OpSemVisitor::visitDie),
         hana::make_pair(BOOST_HANA_STRING("sea.move"),
                         &OpSemVisitor::visitMove),
@@ -1027,6 +1040,16 @@ public:
   }
 
   void visitBorMkSuc(CallBase &CB) {
+    Expr ptrIn = lookup(*CB.getOperand(0));
+    setValue(CB, ptrIn);
+  }
+
+  void visitBorMem2Reg(CallBase &CB) {
+    Expr ptrIn = lookup(*CB.getOperand(0));
+    setValue(CB, ptrIn);
+  }
+
+  void visitMovReg2Mem(CallBase &CB) {
     Expr ptrIn = lookup(*CB.getOperand(0));
     setValue(CB, ptrIn);
   }
@@ -3690,7 +3713,18 @@ void Bv2OpSem::inferOwnTypeOfPtr(const llvm::Function &F) {
         auto ownType2 = it->second;
         assert(ownType == ownType2);
       } else if (isa<LoadInst>(inst)) {
-        // TODO: add logic
+        auto *li = cast<LoadInst>(inst);
+        auto *op0 = li->getOperand(0)->stripPointerCasts();
+        if (isa<CallInst>(op0)) {
+          auto ci = cast<CallInst>(op0);
+          if (ci->getCalledFunction()->getName().equals("sea.bor_mem2reg")) {
+            ownType = OwnType::Bor;
+          } else {
+            ownType = OwnType::Shr;
+          }
+        } else {
+          ownType = OwnType::Shr;
+        }
       } else {
         // default is shared type
         ownType = OwnType::Shr;

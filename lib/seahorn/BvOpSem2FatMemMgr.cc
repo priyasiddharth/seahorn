@@ -393,10 +393,11 @@ public:
                        uint64_t align) {
     MainMemValTy rawVal =
         m_main.loadPtrFromMem(mkMainPtr(ptr), mkMainMem(mem), byteSz, align);
-    MainMemValTy slot0Val = m_slot0.loadIntFromMem(
-        mkMainPtr(ptr), mkSlot0Mem(mem), g_slotByteWidth, align);
-    MainMemValTy slot1Val = m_slot1.loadIntFromMem(
-        mkMainPtr(ptr), mkSlot1Mem(mem), g_slotByteWidth, align);
+    RawPtrTy rawPtr = getAddressable(ptr);
+    MainMemValTy slot0Val =
+        m_slot0.loadIntFromMem(rawPtr, mkSlot0Mem(mem), g_slotByteWidth, align);
+    MainMemValTy slot1Val =
+        m_slot1.loadIntFromMem(rawPtr, mkSlot1Mem(mem), g_slotByteWidth, align);
     return mkFatPtr(rawVal, slot0Val, slot1Val);
   }
 
@@ -430,12 +431,12 @@ public:
                          uint64_t align) {
     MainMemValTy main = m_main.storePtrToMem(mkMainPtr(val), mkMainPtr(ptr),
                                              mkMainMem(mem), byteSz, align);
-    MainMemValTy slot0 =
-        m_slot0.storeIntToMem(getFatData(val, 0), mkMainPtr(ptr),
-                              mkSlot0Mem(mem), g_slotByteWidth, align);
-    MainMemValTy slot1 =
-        m_slot1.storeIntToMem(getFatData(val, 1), mkMainPtr(ptr),
-                              mkSlot1Mem(mem), g_slotByteWidth, align);
+    RawPtrTy rawPtr = getAddressable(ptr);
+
+    MainMemValTy slot0 = m_slot0.storeIntToMem(
+        getFatData(val, 0), rawPtr, mkSlot0Mem(mem), g_slotByteWidth, align);
+    MainMemValTy slot1 = m_slot1.storeIntToMem(
+        getFatData(val, 1), rawPtr, mkSlot1Mem(mem), g_slotByteWidth, align);
     auto res = mkFatMem(main, slot0, slot1);
     return res;
   }
@@ -547,25 +548,31 @@ public:
   /// \brief Executes symbolic memcpy with concrete length
   MemValTy MemCpy(PtrTy dPtr, PtrTy sPtr, unsigned len, MemValTy memTrsfrRead,
                   MemValTy memRead, uint32_t align) {
+    RawPtrTy rawPtrDst = getAddressable(dPtr);
+    RawPtrTy rawPtrSrc = getAddressable(sPtr);
+
     return mkFatMem(
         m_main.MemCpy(mkMainPtr(dPtr), mkMainPtr(sPtr), len,
                       mkMainMem(memTrsfrRead), mkMainMem(memRead), align),
-        m_slot0.MemCpy(mkMainPtr(dPtr), mkMainPtr(sPtr), len,
-                       mkSlot0Mem(memTrsfrRead), mkSlot0Mem(memRead), align),
-        m_slot1.MemCpy(mkMainPtr(dPtr), mkMainPtr(sPtr), len,
-                       mkSlot1Mem(memTrsfrRead), mkSlot1Mem(memRead), align));
+        m_slot0.MemCpy(rawPtrDst, rawPtrSrc, len, mkSlot0Mem(memTrsfrRead),
+                       mkSlot0Mem(memRead), align),
+        m_slot1.MemCpy(rawPtrDst, rawPtrSrc, len, mkSlot1Mem(memTrsfrRead),
+                       mkSlot1Mem(memRead), align));
   }
 
   /// \brief Executes symbolic memcpy with concrete length
   MemValTy MemCpy(PtrTy dPtr, PtrTy sPtr, Expr len, MemValTy memTrsfrRead,
                   MemValTy memRead, uint32_t align) {
+    RawPtrTy rawPtrDst = getAddressable(dPtr);
+    RawPtrTy rawPtrSrc = getAddressable(sPtr);
+
     return mkFatMem(
         m_main.MemCpy(mkMainPtr(dPtr), mkMainPtr(sPtr), len,
                       mkMainMem(memTrsfrRead), mkMainMem(memRead), align),
-        m_slot0.MemCpy(mkMainPtr(dPtr), mkMainPtr(sPtr), len,
-                       mkSlot0Mem(memTrsfrRead), mkSlot0Mem(memRead), align),
-        m_slot1.MemCpy(mkMainPtr(dPtr), mkMainPtr(sPtr), len,
-                       mkSlot1Mem(memTrsfrRead), mkSlot1Mem(memRead), align));
+        m_slot0.MemCpy(rawPtrDst, rawPtrSrc, len, mkSlot0Mem(memTrsfrRead),
+                       mkSlot0Mem(memRead), align),
+        m_slot1.MemCpy(rawPtrDst, rawPtrSrc, len, mkSlot1Mem(memTrsfrRead),
+                       mkSlot1Mem(memRead), align));
   }
 
   /// \brief Executes symbolic memcpy from physical memory with concrete

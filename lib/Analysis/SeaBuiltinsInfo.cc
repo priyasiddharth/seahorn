@@ -39,7 +39,7 @@ using namespace llvm;
 #define SEA_MK_SHR "sea.mkshr"
 #define SEA_BOR_MKBOR "sea.bor_mkbor"
 #define SEA_BOR_MEM2REG "sea.bor_mem2reg"
-#define SEA_MOV_reg2mem "sea.mov_reg2mem"
+#define SEA_MOV_REG2MEM "sea.mov_reg2mem"
 #define SEA_BOR_MKSUC "sea.bor_mksuc"
 #define SEA_BEGIN_UNIQUE "sea.begin_unique"
 #define SEA_END_UNIQUE "sea.end_unique"
@@ -591,14 +591,13 @@ Function *SeaBuiltinsInfo::mkBorMem2Reg(Module &M) {
   auto &C = M.getContext();
   auto FC =
       M.getOrInsertFunction(SEA_BOR_MEM2REG, Type::getInt8PtrTy(C) /* return */,
-                            Type::getInt8PtrTy(C) /* param 0 -- offset ptr */);
+                            Type::getInt8PtrTy(C) /* param 0 -- input ptr */);
   auto *FN = dyn_cast<Function>(FC.getCallee());
   if (FN) {
     FN->setDoesNotThrow();
     FN->setDoesNotRecurse();
     FN->setDoesNotFreeMemory();
     FN->addParamAttr(0, Attribute::NoCapture);
-    // TODO: is the following too weak
     FN->setDoesNotAccessMemory();
   }
   return FN;
@@ -609,14 +608,13 @@ Function *SeaBuiltinsInfo::mkMovReg2Mem(Module &M) {
   auto &C = M.getContext();
   auto FC =
       M.getOrInsertFunction(SEA_MOV_REG2MEM, Type::getInt8PtrTy(C) /* return */,
-                            Type::getInt8PtrTy(C) /* param 0 -- offset ptr */);
+                            Type::getInt8PtrTy(C) /* param 0 -- input ptr */);
   auto *FN = dyn_cast<Function>(FC.getCallee());
   if (FN) {
     FN->setDoesNotThrow();
     FN->setDoesNotRecurse();
     FN->setDoesNotFreeMemory();
     FN->addParamAttr(0, Attribute::NoCapture);
-    // TODO: is the following too weak
     FN->setDoesNotAccessMemory();
   }
   return FN;

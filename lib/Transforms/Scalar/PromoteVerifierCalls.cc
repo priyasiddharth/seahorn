@@ -110,7 +110,8 @@ bool PromoteVerifierCalls::runOnModule(Module &M) {
   m_end_unique = SBI.mkSeaBuiltinFn(SBIOp::END_UNIQUE, M);
   m_die = SBI.mkSeaBuiltinFn(SBIOp::DIE, M);
   m_move = SBI.mkSeaBuiltinFn(SBIOp::MOVE, M);
-  m_bor_ptr = SBI.mkSeaBuiltinFn(SBIOp::BOR_OFFSET, M);
+  m_bor_mem2reg = SBI.mkSeaBuiltinFn(SBIOp::BOR_MEM2REG, M);
+  m_mov_reg2mem = SBI.mkSeaBuiltinFn(SBIOp::MOV_REG2MEM, M);
   m_set_fatptr_slot = SBI.mkSeaBuiltinFn(SBIOp::SET_FATPTR_SLOT, M);
   m_get_fatptr_slot = SBI.mkSeaBuiltinFn(SBIOp::GET_FATPTR_SLOT, M);
 
@@ -182,14 +183,15 @@ bool PromoteVerifierCalls::runOnFunction(Function &F) {
       {"sea_set_shadowmem", {m_set_shadowmem, 3}},
       {"sea_get_shadowmem", {m_get_shadowmem, 2}},
       {"sea_mkown", {m_mkOwn, 1}},
-      {"sea_mkshr", {m_mkShr, 1}},      
+      {"sea_mkshr", {m_mkShr, 1}},
       {"sea_bor_mkbor", {m_borMkBor, 1}},
       {"sea_bor_mksuc", {m_borMkSuc, 1}},
       {"sea_begin_unique", {m_begin_unique, 1}},
       {"sea_end_unique", {m_end_unique, 1}},
       {"sea_die", {m_die, 1}},
       {"sea_mov", {m_move, 1}},
-      {"sea_bor_ptr", {m_bor_ptr, 1}},
+      {"sea_bor_mem2reg", {m_bor_mem2reg, 1}},
+      {"sea_mov_reg2mem", {m_mov_reg2mem, 1}},
       {"sea_set_fatptr_slot", {m_set_fatptr_slot, 3}},
       {"sea_get_fatptr_slot", {m_get_fatptr_slot, 2}},
   };

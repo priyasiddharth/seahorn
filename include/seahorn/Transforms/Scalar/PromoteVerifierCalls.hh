@@ -42,7 +42,8 @@ struct PromoteVerifierCalls : public ModulePass {
   Function *m_end_unique;
   Function *m_die;
   Function *m_move;
-  Function *m_bor_ptr;
+  Function *m_bor_mem2reg;
+  Function *m_mov_reg2mem;
   Function *m_set_fatptr_slot;
   Function *m_get_fatptr_slot;
 

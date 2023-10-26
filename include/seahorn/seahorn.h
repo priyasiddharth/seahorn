@@ -197,9 +197,9 @@ extern char *sea_mov_reg2mem(char *);
 #define SEA_BORROW_LOAD(BOR, PTR_TO_SRC_PTR)                                   \
   do {                                                                         \
     char *intmd_ptrptrto = sea_bor_mem2reg((char *)(PTR_TO_SRC_PTR));          \
-    typeof(BOR)(ptr) = *((typeof(PTR_TO_SRC_PTR))intmd_ptrptrto);              \
-    SEA_BORROW(BOR, ptr);                                                      \
-    *(PTR_TO_SRC_PTR) = ptr;                                                   \
+    typeof(BOR)(mem2reg_ptr) = *((typeof(PTR_TO_SRC_PTR))intmd_ptrptrto);      \
+    SEA_BORROW(BOR, mem2reg_ptr);                                              \
+    *(PTR_TO_SRC_PTR) = mem2reg_ptr;                                           \
   } while (0)
 
 /* Convenience macros */

@@ -598,7 +598,7 @@ Function *SeaBuiltinsInfo::mkBorMem2Reg(Module &M) {
     FN->setDoesNotRecurse();
     FN->setDoesNotFreeMemory();
     FN->addParamAttr(0, Attribute::NoCapture);
-    FN->setDoesNotAccessMemory();
+    // FN->setDoesNotAccessMemory();
   }
   return FN;
 }
@@ -615,7 +615,7 @@ Function *SeaBuiltinsInfo::mkMovReg2Mem(Module &M) {
     FN->setDoesNotRecurse();
     FN->setDoesNotFreeMemory();
     FN->addParamAttr(0, Attribute::NoCapture);
-    FN->setDoesNotAccessMemory();
+    // FN->setDoesNotAccessMemory();
   }
   return FN;
 }

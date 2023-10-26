@@ -3689,8 +3689,20 @@ void Bv2OpSem::inferOwnTypeOfPtr(const llvm::Function &F) {
         // default is shared type
         ownType = OwnType::Shr;
       }
-      LOG("opsem.ownsem", INFO << "OwnSem TypeInfer: " << curr_inst << " : "
-                               << ownType._to_string(););
+       // print to log
+      llvm::SmallString<1024> msg;
+      llvm::raw_svector_ostream out(msg);
+      auto i = dyn_cast<llvm::Instruction>(inst);
+      assert(i != NULL);
+      out << "OwnSem TypeInfer: " << *i;
+      auto dloc = i->getDebugLoc();
+      if (dloc) {
+        out << " at " << dloc->getFilename() << ":" << dloc->getLine() << "]";
+      }
+      out << ": ";
+      out << ownType._to_string();
+      out << "\n";
+      LOG("opsem.ownsem", INFO << out.str(););
       m_ownType_map->insert({&curr_inst, ownType});
     }
   }

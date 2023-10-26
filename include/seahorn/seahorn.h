@@ -193,6 +193,7 @@ extern char *sea_mov_reg2mem(char *);
     (BOR_OFF) = ((typeof(BOR_OFF))(boroff_intmd0)) + OFFSET;                   \
   } while (0)
 
+// TODO: return new ptr to mem and use that
 #define SEA_BORROW_LOAD(BOR, PTR_TO_SRC_PTR)                                   \
   do {                                                                         \
     char *intmd_ptrptrto = sea_bor_mem2reg((char *)(PTR_TO_SRC_PTR));          \

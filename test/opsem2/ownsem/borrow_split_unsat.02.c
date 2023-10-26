@@ -1,13 +1,13 @@
-//; RUN: %sea "%s" --own-sem 2>&1 | OutputCheck %s
-//; RUN: %sea "%s" --own-sem --horn-vcgen-use-ite --horn-vcgen-only-dataflow --horn-bmc-coi --horn-gsa  2>&1 | OutputCheck %s
+//; RUN: %sea "%s" -S --own-sem 2>&1 | OutputCheck %s
+//; RUN: %sea "%s" -S --own-sem --horn-vcgen-use-ite --horn-vcgen-only-dataflow --horn-bmc-coi --horn-gsa  2>&1 | OutputCheck %s
 // CHECK: ^unsat$
 #include "seahorn/seahorn.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdlib.h>
 
-extern char nd_char();
-extern bool nd_bool();
+extern char nd_char(void);
+extern bool nd_bool(void);
 
 typedef struct handle_t {
   unsigned val;

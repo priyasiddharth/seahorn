@@ -66,7 +66,7 @@ int main() {
   SEA_WRITE_CACHE(h1b_valid, false);
   *h1b_valid = false;
   SEA_DIE(h1b_valid);
-
+  SEA_DIE(h1b);
   // It is valid to read from cache instead of memory
   // since h11u is unique;
   bool v;

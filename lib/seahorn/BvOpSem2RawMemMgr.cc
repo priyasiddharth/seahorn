@@ -101,6 +101,12 @@ RawMemManagerCore::RawMemManagerCore(Bv2OpSem &sem, Bv2OpSemContext &ctx,
         std::make_unique<OpSemMemArrayRepr>(*this, ctx, MemCpyUnrollCount);
 }
 
+  RawMemManagerCore::RawMemManagerCore(const RawMemManagerCore &orig)
+    :  RawMemManager::RawMemManagerCore(orig.sem(),orig.ctx(),
+                      orig.ptrSizeInBytes(), orig.wordSizeInBytes(),
+                      true /* useLambdas */) {}
+
+
 /// \brief Creates a non-deterministic pointer that is aligned
 ///
 /// Top bits of the pointer are named by \p name and last \c log2(align) bits

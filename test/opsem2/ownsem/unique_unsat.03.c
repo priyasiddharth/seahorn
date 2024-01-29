@@ -46,6 +46,7 @@ int main() {
   // NOTE: this is the outstanding borrow so only it needs
   // to die
   SEA_DIE(h1b_valid);
+  SEA_DIE(h1b);
 
   // It is valid to read from cache instead of memory
   // since h11u is unique;

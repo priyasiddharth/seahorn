@@ -1,5 +1,6 @@
 #include "BvOpSem2MemRepr.hh"
 #include "seahorn/Expr/ExprOpBinder.hh"
+#include "seahorn/Expr/TypeChecker.hh"
 
 namespace {
 template <typename T, typename... Rest>
@@ -185,15 +186,23 @@ OpSemMemRepr::MemValTy OpSemMemArrayRepr::MemFill(PtrTy dPtr, char *sPtr,
 OpSemMemRepr::MemValTy
 OpSemMemLambdaRepr::storeAlignedWordToMem(Expr val, PtrTy ptr,
                                           PtrSortTy ptrSort, MemValTy mem) {
+  TypeChecker tc;
   PtrTy b0 = PtrTy(bind::bvar(0, ptrSort.toExpr()));
 
   Expr fappl = op::bind::fapp(mem.toExpr(), b0.toExpr());
+  //assert((expr::op::typeCheck::correctTypeAny<FUNCTIONAL_TY>(fappl, tc)));
+
   Expr ite = boolop::lite(m_memManager.ptrEq(b0, ptr), val, fappl);
 
   Expr addr =
       bind::mkConst(mkTerm<std::string>("addr", m_efac), ptrSort.toExpr());
   Expr decl = bind::fname(addr);
-  return MemValTy(mk<LAMBDA>(decl, ite));
+  auto r = mk<LAMBDA>(decl, ite);
+  tc.typeOf(r);
+  if (tc.getErrorExp() != Expr()) {
+    abort();
+  }
+  return MemValTy(r);
 }
 
 // len is in bytes
@@ -433,10 +442,8 @@ Expr OpSemMemLambdaRepr::coerceArrayToLambda(Expr arrVal) {
   Expr name = bind::fname(arrVal);
   Expr rTy = bind::rangeTy(name);
   Expr idxTy = sort::arrayIndexTy(rTy);
-
   Expr bvAddr = bind::mkConst(mkTerm<std::string>("addr", m_efac), idxTy);
   Expr sel = op::array::select(arrVal, bvAddr);
-
   return bind::abs<LAMBDA>(as_std_array(bvAddr), sel);
 }
 

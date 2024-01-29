@@ -26,6 +26,7 @@
 
 #include "seahorn/Expr/ExprLlvm.hh"
 #include "seahorn/Expr/ExprOpBinder.hh"
+#include "seahorn/Expr/TypeChecker.hh"
 
 #include "BvOpSem2Context.hh"
 
@@ -181,6 +182,7 @@ static llvm::cl::opt<bool>
     UseOwnSem("horn-bv2-own-sem",
               llvm::cl::desc("Interpret Ownership semantics during VCGen"),
               llvm::cl::init(false));
+
 namespace {
 
 const Value *extractUniqueScalar(const CallBase &CB) {
@@ -2690,7 +2692,22 @@ Expr Bv2OpSemContext::simplify(Expr u) {
   return _u;
 }
 
+bool checkWellFormed(Expr e, Expr reg) {
+    TypeChecker tc;
+
+    // llvm::errs() << "Expression: " << *e << "\n";
+    Expr ty = tc.typeOf(e);
+    return ty == tc.typeOf(reg);
+}
+
 void Bv2OpSemContext::write(Expr v, Expr u) {
+  TypeChecker tc;
+
+  LOG("opsem", errs() << "Write type check for regtype=" << *tc.typeOf(v)
+                      << ", valtype=" << *tc.typeOf(u) << "\n";);
+  if (tc.getErrorExp() != Expr()) {
+    abort();
+  }
   if (shouldSimplify()) {
     u = simplify(u);
   }
@@ -2918,6 +2935,7 @@ Expr Bv2OpSemContext::mkRegister(const llvm::Instruction &inst) {
     // if tracking memory content, create array-valued register for
     // the pseudo-assignment
     else { //(true /*m_trackLvl >= MEM*/) {
+
       reg = bind::mkConst(v, mkMemRegisterSort(inst));
     }
   } else {
@@ -3725,11 +3743,25 @@ void Bv2OpSem::inferOwnTypeOfPtr(const llvm::Function &F) {
         } else {
           ownType = OwnType::Shr;
         }
+      } else if (isa<StoreInst>(inst)) {
+        auto *si = cast<StoreInst>(inst);
+        // NOTE: store location comes from a move op
+        auto *op0 = si->getOperand(1)->stripPointerCasts();
+        if (isa<CallInst>(op0)) {
+          auto ci = cast<CallInst>(op0);
+          if (ci->getCalledFunction()->getName().equals("sea.mov_reg2mem")) {
+            ownType = OwnType::Bor;
+          } else {
+            ownType = OwnType::Shr;
+          }
+        } else {
+          ownType = OwnType::Shr;
+        }
       } else {
         // default is shared type
         ownType = OwnType::Shr;
       }
-       // print to log
+      // print to log
       llvm::SmallString<1024> msg;
       llvm::raw_svector_ostream out(msg);
       auto i = dyn_cast<llvm::Instruction>(inst);

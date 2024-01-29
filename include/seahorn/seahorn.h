@@ -103,6 +103,7 @@ extern char *sea_mov_reg2mem(char *);
     (VAL) = (typeof(VAL))sea_get_fatptr_slot((char *)(SRC), 1);                \
   } while (0);
 
+// NOTE: intrinsic
 #define SEA_MKOWN(SRC)                                                         \
   do {                                                                         \
     uint64_t nd_slot0 = nd_uint64t();                                          \
@@ -114,21 +115,25 @@ extern char *sea_mov_reg2mem(char *);
     (SRC) = (typeof(SRC))intmd0;                                               \
   } while (0)
 
+// NOTE: intrinsic
 #define SEA_MKSHR(SRC)                                                         \
   do {                                                                         \
     (SRC) = (typeof(SRC))sea_mkshr((char *)(SRC));                             \
   } while (0)
 
+// NOTE: intrinsic
 #define SEA_BEGIN_UNIQUE(SRC)                                                  \
   do {                                                                         \
     (SRC) = (typeof(SRC))sea_begin_unique((char *)(SRC));                      \
   } while (0)
 
+// NOTE: intrinsic
 #define SEA_END_UNIQUE(SRC)                                                    \
   do {                                                                         \
     (SRC) = (typeof(SRC))sea_end_unique((char *)(SRC));                        \
   } while (0)
 
+// NOTE: intrinsic
 #define SEA_BEGIN_UNIQUE_AND_LOAD_CACHE(SRC, VAL)                              \
   do {                                                                         \
     (SRC) = (typeof(SRC))sea_begin_unique((char *)SRC);                        \
@@ -136,6 +141,7 @@ extern char *sea_mov_reg2mem(char *);
   } while (0)
 
 // TODO: make cache nd after unloading
+// NOTE: intrinsic
 #define SEA_UNLOAD_CACHE_AND_END_UNIQUE(SRC, DSTADDRESS, DSTLEN)               \
   do {                                                                         \
     char uniqval = __sea_get_extptr_slot0_hm((char *)SRC);                     \
@@ -143,16 +149,19 @@ extern char *sea_mov_reg2mem(char *);
     memset((char *)DSTADDRESS, uniqval, 1 /* FIXME: use DSTLEN */);            \
   } while (0)
 
+// NOTE: intrinsic
 #define SEA_WRITE_CACHE(SRC, VAL)                                              \
   do {                                                                         \
     SEA_SET_FATPTR_SLOT0((SRC), (VAL));                                        \
   } while (0)
 
+// NOTE: intrinsic
 #define SEA_READ_CACHE(VAL, SRC)                                               \
   do {                                                                         \
     SEA_GET_FATPTR_SLOT0((char *)SRC, (VAL));                                  \
   } while (0)
 
+// NOTE: intrinsic
 #define SEA_BORROW(BOR, SRC)                                                   \
   do {                                                                         \
     (BOR) = (typeof(BOR))sea_bor_mkbor((char *)SRC);                           \
@@ -163,13 +172,11 @@ extern char *sea_mov_reg2mem(char *);
     SEA_GET_FATPTR_SLOT1((SRC), retval);                                       \
     SEA_SET_FATPTR_SLOT0((BOR), brval);                                        \
     uint64_t ndval = nd_uint64t();                                             \
-    assume(ndval == retval);                                                   \
     SEA_SET_FATPTR_SLOT1((BOR), ndval)                                         \
     SEA_SET_FATPTR_SLOT0((SRC), ndval);                                        \
-    uint64_t ndval_dst = nd_uint64t();                                         \
-    SEA_SET_FATPTR_SLOT1((SRC), ndval_dst);                                    \
-  } while (0)
+   } while (0)
 
+// NOTE: intrinsic
 #define SEA_DIE(SRC)                                                           \
   do {                                                                         \
     uint64_t nd_retval;                                                        \
@@ -180,12 +187,14 @@ extern char *sea_mov_reg2mem(char *);
     sea_die((char *)(SRC));                                                    \
   } while (0)
 
+// NOTE: intrinsic
 #define SEA_LOAD_CACHE_AND_BORROW(BOR, SRC, VAL)                               \
   do {                                                                         \
     char *intmd = __sea_set_extptr_slot0_hm((char *)(SRC), (VAL));             \
     SEA_BORROW((BOR), intmd);                                                  \
   } while (0)
 
+// NOTE: intrinsic
 #define SEA_BORROW_OFFSET(BOR_OFF, SRC, OFFSET)                                \
   do {                                                                         \
     char *boroff_intmd0;                                                       \
@@ -193,7 +202,7 @@ extern char *sea_mov_reg2mem(char *);
     (BOR_OFF) = ((typeof(BOR_OFF))(boroff_intmd0)) + OFFSET;                   \
   } while (0)
 
-// TODO: return new ptr to mem and use that
+// NOTE: intrinsic
 #define SEA_BORROW_LOAD(BOR, PTR_TO_SRC_PTR)                                   \
   do {                                                                         \
     char *intmd_ptrptrto = sea_bor_mem2reg((char *)(PTR_TO_SRC_PTR));          \

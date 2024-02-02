@@ -2692,22 +2692,13 @@ Expr Bv2OpSemContext::simplify(Expr u) {
   return _u;
 }
 
-bool checkWellFormed(Expr e, Expr reg) {
-    TypeChecker tc;
-
-    // llvm::errs() << "Expression: " << *e << "\n";
-    Expr ty = tc.typeOf(e);
-    return ty == tc.typeOf(reg);
-}
-
 void Bv2OpSemContext::write(Expr v, Expr u) {
+  
+  #ifndef NDEBUG
   TypeChecker tc;
-
-  LOG("opsem", errs() << "Write type check for regtype=" << *tc.typeOf(v)
-                      << ", valtype=" << *tc.typeOf(u) << "\n";);
-  if (tc.getErrorExp() != Expr()) {
-    abort();
-  }
+  auto ty = tc.typeOf(u);
+  assert(!(isOp<ERROR_TY>(ty) || isOp<ERRORBINDER>(ty)));
+  #endif
   if (shouldSimplify()) {
     u = simplify(u);
   }
@@ -3655,7 +3646,7 @@ const llvm::ConstantRange Bv2OpSem::getLVIInstRng(llvm::Instruction &I) {
 }
 
 void Bv2OpSem::inferOwnTypeOfPtr(const llvm::Function &F) {
-  constexpr auto ownFnName = boost::hana::make_set("sea.mkown");
+  /* constexpr auto ownFnName = boost::hana::make_set("sea.mkown");
   constexpr auto borFnName = boost::hana::make_set("sea.bor_mkbor");
   constexpr auto unqFnName = boost::hana::make_set(
       "sea.begin_unique"); // sea.end_unique is default cased
@@ -3776,8 +3767,8 @@ void Bv2OpSem::inferOwnTypeOfPtr(const llvm::Function &F) {
       out << "\n";
       LOG("opsem.ownsem", INFO << out.str(););
       m_ownType_map->insert({&curr_inst, ownType});
-    }
-  }
+    } 
+  }*/
 }
 } // namespace seahorn
 

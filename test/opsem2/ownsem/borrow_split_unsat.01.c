@@ -1,4 +1,4 @@
-//; RUN: %sea "%s" --own-sem 2>&1 | OutputCheck %s
+//; RUN: %sea "%s" -g -S --own-sem 2>&1 | OutputCheck %s
 // CHECK: ^unsat$
 #include "seahorn/seahorn.h"
 #include <stdbool.h>
@@ -54,7 +54,7 @@ int main() {
   sassert(valToAssert == false);
   Handle *h1b;
   SEA_BORROW(h1b, h0);
-
+  SEA_DIE(h1b);
   bool *h1b_valid, *h2b_valid;
   SEA_BORROW_OFFSET(h1b_valid, h0, offsetof(Handle, valid));
   // When writing to memory, also write to cache.
@@ -62,7 +62,7 @@ int main() {
   *h1b_valid = false;
 
   SEA_DIE(h1b_valid);
-
+  SEA_DIE(h1b);
   // It is valid to read from cache instead of memory
   // since h11u is unique;
   bool v;

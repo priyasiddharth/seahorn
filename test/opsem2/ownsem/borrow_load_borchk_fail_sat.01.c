@@ -1,5 +1,5 @@
 //; RUN: %sea "%s" -g -S --own-sem 2>&1 | OutputCheck %s
-// CHECK: ^unsat$
+// CHECK: ^sat$
 #include "seahorn/seahorn.h"
 #include <stdbool.h>
 #include <stddef.h>
@@ -38,7 +38,8 @@ int main() {
   sea_printf("Cache val after first write:%d\n", r);
   *bor_ptr = TAINT;
 
-  SEA_DIE(bor_ptr);
+  // NOTE: The following DIE is missing and hence the next BORROW_LOAD fails.
+  // SEA_DIE(bor_ptr);
 
   uint32_t *bor_ptr2;
   SEA_BORROW_LOAD(bor_ptr2, &h0->own_uint32ptr);

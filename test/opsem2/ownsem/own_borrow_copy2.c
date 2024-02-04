@@ -1,4 +1,4 @@
-//; RUN: %sea "%s" --own-sem 2>&1 | OutputCheck %s
+//; RUN: %sea "%s" -g -S --horn-bmc-tactic=smtfd  --own-sem 2>&1 | OutputCheck %s
 // CHECK: ^unsat$
 #include "seahorn/seahorn.h"
 #include <stdbool.h>

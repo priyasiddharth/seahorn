@@ -1,4 +1,4 @@
-//; RUN: %sea "%s" --own-sem 2>&1 | OutputCheck %s
+//; RUN: %sea "%s" --own-sem -g -S 2>&1 | OutputCheck %s
 // CHECK: ^unsat$
 #include "seahorn/seahorn.h"
 #include <stdbool.h>
@@ -20,6 +20,7 @@ int main() {
   h0->valid = false;
 
   SEA_MKOWN(h0);
+
   h0->valid = false;
   SEA_WRITE_CACHE(h0, false);
   bool *h0b0_valid;

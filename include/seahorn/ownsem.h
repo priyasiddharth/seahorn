@@ -20,20 +20,11 @@ extern char *sea_mkshr(char *);
 extern char *sea_bor_mem2reg(char *);
 extern char *sea_mov_reg2mem(char *);
 extern bool nd_bool(void);
-/**
- * bit 8 --
- * bit 7 --
- * bit 6 --
- * bit 5 --
- * bit 4 --
- * bit 3 --
- * bit 2 -- held bit
- * bit 1 -- lent bit
- * bit 0 --
- **/
 
+// Information to bit map
 #define HELD_BIT 0x2
 #define LENT_BIT 0x1
+#define OWN_BIT 0x0
 
 #define GET_BIT(x, loc) (((uint64_t)x & (1 << loc)) >> loc)
 

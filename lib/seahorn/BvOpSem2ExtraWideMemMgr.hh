@@ -82,6 +82,12 @@ public:
 
     MemValTyImpl(RawMemValTy &&raw_val, Expr &&offset_val, Expr &&size_val) {
       assert(!strct::isStructVal(size_val));
+      auto a = {raw_val, offset_val, size_val};
+      for (auto element : a) {
+        TypeChecker tc;
+        tc.typeOf(element);
+        assert(tc.getErrorExp() == nullptr);
+      }
       m_v = strct::mk(std::move(raw_val), std::move(offset_val),
                       std::move(size_val));
     }
@@ -89,6 +95,12 @@ public:
     MemValTyImpl(const RawPtrTy &raw_val, const Expr &offset_val,
                  const Expr &size_val) {
       assert(!strct::isStructVal(size_val));
+      auto a = {raw_val, offset_val, size_val};
+      for (auto element : a) {
+        TypeChecker tc;
+        tc.typeOf(element);
+        assert(tc.getErrorExp() == nullptr);
+      }
       m_v = strct::mk(raw_val, offset_val, size_val);
     }
 

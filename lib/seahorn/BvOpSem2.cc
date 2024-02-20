@@ -1,5 +1,6 @@
 #include "seahorn/BvOpSem2.hh"
 #include "BvOpSem2ExtraWideMemMgr.hh"
+#include "BvOpSem2FatMemMgr.hh"
 #include "BvOpSem2RawMemMgr.hh"
 #include "llvm/Analysis/LazyValueInfo.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
@@ -532,6 +533,14 @@ public:
   }
 
   void visitLoadInst(LoadInst &I) {
+    Stats::count("opsem.load");
+    auto dloc = I.getDebugLoc();
+    if (dloc) {
+      LOG("opsem.load",
+          INFO << dloc->getFilename() << ":" << dloc->getLine() << "]";);
+    } else {
+      LOG("opsem.load", INFO << I;);
+    }
     setValue(I, executeLoadInst(*I.getPointerOperand(), I.getAlignment(),
                                 I.getType(), m_ctx));
   }
@@ -859,6 +868,10 @@ public:
       m_ctx.setMemReadRegister(Expr());
       return;
     }
+    auto returnType = CB.getType();
+    assert(returnType->isIntegerTy());
+    llvm::IntegerType *intType = llvm::cast<llvm::IntegerType>(returnType);
+    unsigned bitWidth = intType->getBitWidth();
     Expr slot = lookup(*CB.getOperand(0));
     if (!m_ctx.alu().isNum(slot)) {
       LOG("opsem", ERR << "Metadata slot should resolve to a number.");
@@ -872,9 +885,8 @@ public:
     Expr ptr = lookup(*CB.getOperand(1));
     auto memIn = m_ctx.read(m_ctx.getMemReadRegister());
     OpSemMemManager &memManager = m_ctx.mem();
-    auto res =
-        memManager.getMetadata(static_cast<MetadataKind>(slotNum), ptr, memIn,
-                               memManager.getMetadataMemWordSzInBits() / 8);
+    auto res = memManager.getMetadata(static_cast<MetadataKind>(slotNum), ptr,
+                                      memIn, bitWidth / 8);
     setValue(CB, res);
     m_ctx.setMemReadRegister(Expr());
   };
@@ -892,6 +904,14 @@ public:
     }
     Expr ptr = lookup(*CB.getOperand(1));
     Expr exprToSet = lookup(*CB.getOperand(2));
+    auto toSetTy = CB.getOperand(2)->getType();
+    assert(toSetTy->isIntegerTy());
+    llvm::IntegerType *intType = llvm::cast<llvm::IntegerType>(toSetTy);
+    unsigned bitWidth = intType->getBitWidth();
+    if (bitWidth < m_ctx.mem().getMetadataMemWordSzInBits()) {
+      exprToSet = m_ctx.alu().doZext(
+          exprToSet, m_ctx.mem().getMetadataMemWordSzInBits(), bitWidth);
+    }
     auto memIn = m_ctx.read(m_ctx.getMemReadRegister());
     Expr res = m_ctx.mem().setMetadata(static_cast<MetadataKind>(slotNum), ptr,
                                        memIn, exprToSet);
@@ -2578,7 +2598,7 @@ Bv2OpSemContext::Bv2OpSemContext(Bv2OpSem &sem, SymStore &values,
       mem = mkExtraWideMemManager(m_sem, *this, ptrSize, wordSize, UseLambdas);
     }
   } else if (UseOwnSem) {
-    mem = mkFatMemEWWTManager(sem, *this, ptrSize, wordSize, UseLambdas);
+    mem = mkFatEWWTManager(sem, *this, ptrSize, wordSize, UseLambdas);
   } else {
     mem = mkRawMemManager(m_sem, *this, ptrSize, wordSize, UseLambdas);
   }

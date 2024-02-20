@@ -1,13 +1,24 @@
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
+
+#ifdef __cplusplus
+#define cast_to(x, y) (decltype(x))(y)
+#else
+#define cast_to(x, y) (typeof(x))(y)
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 extern char *sea_begin_unique(char *);
 extern char *sea_end_unique(char *);
-extern char *__sea_set_extptr_slot0_hm(char *ptr, char val);
-extern char __sea_get_extptr_slot0_hm(char *ptr);
-extern char *__sea_set_extptr_slot1_hm(char *ptr, char val);
-extern char __sea_get_extptr_slot1_hm(char *ptr);
+extern char *__sea_set_extptr_slot0_hm(char *ptr, size_t val);
+extern size_t __sea_get_extptr_slot0_hm(char *ptr);
+extern char *__sea_set_extptr_slot1_hm(char *ptr, size_t val);
+extern size_t __sea_get_extptr_slot1_hm(char *ptr);
 extern char *sea_set_fatptr_slot(char *ptr, char slot, uint64_t val);
 extern uint64_t sea_get_fatptr_slot(char *ptr, char slot);
 extern char nd_char(void);
@@ -18,8 +29,12 @@ extern void sea_die(char *);
 extern char *sea_mkown(char *);
 extern char *sea_mkshr(char *);
 extern char *sea_bor_mem2reg(char *);
-extern char *sea_mov_reg2mem(char *);
+extern char *sea_mov_reg2mem(char * /*dst_ptrtoptr*/, char * /*src_ptr*/);
 extern bool nd_bool(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 // Information to bit map
 #define HELD_BIT 0x2
@@ -71,7 +86,7 @@ extern bool nd_bool(void);
 
 #define SEA_GET_FATPTR_SLOT0(SRC, VAL)                                         \
   do {                                                                         \
-    (VAL) = (typeof(VAL))sea_get_fatptr_slot((char *)(SRC), 0);                \
+    (VAL) = cast_to(VAL, sea_get_fatptr_slot((char *)(SRC), 0));               \
   } while (0);
 
 #define SEA_GET_FATPTR_SLOT1(SRC, VAL)                                         \
@@ -189,7 +204,7 @@ extern bool nd_bool(void);
 // NOTE: intrinsic
 #define SEA_READ_CACHE(VAL, SRC)                                               \
   do {                                                                         \
-    SEA_GET_FATPTR_SLOT0((char *)SRC, (VAL));                                  \
+    SEA_GET_FATPTR_SLOT0((char *)SRC, VAL);                                    \
   } while (0)
 
 // NOTE: intrinsic
@@ -199,8 +214,8 @@ extern bool nd_bool(void);
     SEA_GET_FATPTR_SLOT(SRC, OWNERSHIP_SLOT, src_own_data);                    \
     bool is_lent = GET_LENT(src_own_data);                                     \
     sassert(!is_lent);                                                         \
-    (BOR) = (typeof(BOR))sea_bor_mkbor((char *)SRC);                           \
-    (SRC) = (typeof(SRC))sea_bor_mksuc((char *)SRC);                           \
+    (BOR) = cast_to(BOR, sea_bor_mkbor((char *)SRC));                          \
+    (SRC) = cast_to(SRC, sea_bor_mksuc((char *)SRC));                          \
     uint64_t brval;                                                            \
     SEA_GET_FATPTR_SLOT0((SRC), brval);                                        \
     uint64_t retval;                                                           \
@@ -226,6 +241,12 @@ extern bool nd_bool(void);
       uint64_t new_own_data = SET_HELD(own_data, false);                       \
       SEA_SET_FATPTR_SLOT(SRC, OWNERSHIP_SLOT, new_own_data);                  \
     }                                                                          \
+  } while (0);
+
+#define SEA_MOVE2MEM(PTR_TO_SRC_PTR, SRC)                                      \
+  do {                                                                         \
+    (SRC) = (typeof(SRC))sea_mov_reg2mem((char *)SRC, (char *)PTR_TO_SRC_PTR); \
+    *(PTR_TO_SRC_PTR) = (typeof(SRC))(SRC);                                    \
   } while (0);
 
 // NOTE: intrinsic

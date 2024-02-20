@@ -54,7 +54,7 @@ Expr ExtraWideMemManagerCore<T>::isMetadataSet(
     MetadataKind kind, ExtraWideMemManagerCore::PtrTy ptr,
     ExtraWideMemManagerCore::MemValTy mem) {
   // The width of the value will be wordSz
-  Expr val = getMetadata(kind, ptr, mem, 1);
+  Expr val = getMetadata(kind, ptr, mem, getMetadataMemWordSzInBits() / 8);
   if (val == Expr()) {
     return m_ctx.alu().getTrue();
   }
@@ -762,6 +762,8 @@ OpSemMemManager *mkTrackingExtraWideMemManager(Bv2OpSem &sem,
 }
 
 template class ExtraWideMemManagerCore<RawMemManager>;
+template class ExtraWideMemManagerCore<
+    OpSemMemManagerMixin<TrackingRawMemManager>>;
 template class OpSemMemManagerMixin<
     ExtraWideMemManagerCore<OpSemMemManagerMixin<TrackingRawMemManager>>>;
 

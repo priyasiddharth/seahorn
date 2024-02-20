@@ -38,6 +38,7 @@ using namespace llvm;
 #define SEA_MK_OWN "sea.mkown"
 #define SEA_MK_SHR "sea.mkshr"
 #define SEA_BOR_MKBOR "sea.bor_mkbor"
+#define SEA_BOR_MKBOR_PART "sea.bor_mkbor_part"
 #define SEA_BOR_MEM2REG "sea.bor_mem2reg"
 #define SEA_MOV_REG2MEM "sea.mov_reg2mem"
 #define SEA_BOR_MKSUC "sea.bor_mksuc"
@@ -82,6 +83,7 @@ seahorn::SeaBuiltinsInfo::getSeaBuiltinOp(const llvm::CallBase &cb) const {
       .Case(SEA_MK_OWN, SBIOp::MK_OWN)
       .Case(SEA_MK_SHR, SBIOp::MK_SHR)
       .Case(SEA_BOR_MKBOR, SBIOp::BOR_MKBOR)
+      .Case(SEA_BOR_MKBOR_PART, SBIOp::BOR_MKBOR_PART)
       .Case(SEA_BOR_MKSUC, SBIOp::BOR_MKSUC)
       .Case(SEA_BEGIN_UNIQUE, SBIOp::BEGIN_UNIQUE)
       .Case(SEA_END_UNIQUE, SBIOp::END_UNIQUE)
@@ -146,6 +148,8 @@ llvm::Function *SeaBuiltinsInfo::mkSeaBuiltinFn(SeaBuiltinsOp op,
     return mkMkShr(M);
   case SBIOp::BOR_MKBOR:
     return mkBorMkBor(M);
+  case SBIOp::BOR_MKBOR_PART:
+    return mkBorMkBorPart(M);
   case SBIOp::BOR_MKSUC:
     return mkBorMkSuc(M);
   case SBIOp::BEGIN_UNIQUE:
@@ -292,8 +296,9 @@ Function *SeaBuiltinsInfo::mkResetReadFn(Module &M) {
 
 Function *SeaBuiltinsInfo::mkGetShadowMem(llvm::Module &M) {
   auto &C = M.getContext();
+  auto *IntPtrTy = M.getDataLayout().getIntPtrType(C);
   auto FC = M.getOrInsertFunction(SEA_GET_SHADOWMEM,
-                                  Type::getInt8Ty(C),   // return type
+                                  IntPtrTy,             // return type
                                   Type::getInt8Ty(C),   // slot number 0..255
                                   Type::getInt8PtrTy(C) // address int8_t*
   );
@@ -310,11 +315,12 @@ Function *SeaBuiltinsInfo::mkGetShadowMem(llvm::Module &M) {
 
 Function *SeaBuiltinsInfo::mkSetShadowMem(llvm::Module &M) {
   auto &C = M.getContext();
+  auto *IntPtrTy = M.getDataLayout().getIntPtrType(C);
   auto FC = M.getOrInsertFunction(SEA_SET_SHADOWMEM,
                                   Type::getVoidTy(C),    // return type
                                   Type::getInt8Ty(C),    // slot number 0..255
                                   Type::getInt8PtrTy(C), // address int8_t*
-                                  Type::getInt8Ty(C)     // value to set
+                                  IntPtrTy               // value to set
   );
   auto *FN = dyn_cast<Function>(FC.getCallee());
   if (FN) {
@@ -531,6 +537,28 @@ Function *SeaBuiltinsInfo::mkBorMkBor(Module &M) {
   }
   return FN;
 }
+Function *SeaBuiltinsInfo::mkBorMkBorPart(Module &M) {
+  // This consumes an owned/borowed/uniqued ptr and returns a bowrrowed ptr
+  auto &C = M.getContext();
+  auto *IntPtrTy = M.getDataLayout().getIntPtrType(C);
+  auto FC = M.getOrInsertFunction(
+      SEA_BOR_MKBOR_PART, Type::getInt8PtrTy(C) /* return  */,
+      Type::getInt8PtrTy(C) /* param */, IntPtrTy /* start inclusive */,
+      IntPtrTy /* end exclusive */);
+  auto *FN = dyn_cast<Function>(FC.getCallee());
+  if (FN) {
+    FN->setDoesNotThrow();
+    FN->setDoesNotRecurse();
+    FN->setDoesNotFreeMemory();
+    FN->addParamAttr(0, Attribute::NoCapture);
+    FN->addParamAttr(1, Attribute::NoCapture);
+    FN->addParamAttr(2, Attribute::NoCapture);
+    // TODO: is the following too weak
+    FN->setDoesNotAccessMemory();
+  }
+  return FN;
+}
+
 Function *SeaBuiltinsInfo::mkBorMkSuc(Module &M) {
   // This consumes an KIND (owned/borowed/uniqued) ptr and returns a KIND ptr.
   // This ptr will not be used until ptr created by bor_mkbor dies.
@@ -606,15 +634,17 @@ Function *SeaBuiltinsInfo::mkMovReg2Mem(Module &M) {
   // This marks a ptr in a register as to be moved to
   // memory.
   auto &C = M.getContext();
-  auto FC =
-      M.getOrInsertFunction(SEA_MOV_REG2MEM, Type::getInt8PtrTy(C) /* return */,
-                            Type::getInt8PtrTy(C) /* param 0 -- input ptr */);
+  auto FC = M.getOrInsertFunction(
+      SEA_MOV_REG2MEM, Type::getInt8PtrTy(C) /* return */,
+      Type::getInt8PtrTy(C) /* param 0 -- src ptr */,
+      Type::getInt8PtrTy(C) /* param 0 -- dst ptrttoptr */);
   auto *FN = dyn_cast<Function>(FC.getCallee());
   if (FN) {
     FN->setDoesNotThrow();
     FN->setDoesNotRecurse();
     FN->setDoesNotFreeMemory();
     FN->addParamAttr(0, Attribute::NoCapture);
+    // captures attribute 1
     // FN->setDoesNotAccessMemory();
   }
   return FN;

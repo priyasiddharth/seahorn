@@ -3,7 +3,7 @@
 namespace seahorn {
 namespace details {
 
-const unsigned int TrackingRawMemManager::g_MetadataBitWidth = 8;
+const unsigned int TrackingRawMemManager::g_MetadataBitWidth = 64;
 const unsigned int TrackingRawMemManager::g_MetadataByteWidth =
     TrackingRawMemManager::g_MetadataBitWidth / 8;
 const unsigned int TrackingRawMemManager::g_num_slots =
@@ -20,6 +20,8 @@ TrackingMemoryTuple::TrackingMemoryTuple(Bv2OpSem &sem, Bv2OpSemContext &ctx,
       m_a_metadata(sem, ctx, ptrSz, TrackingRawMemManager::g_MetadataByteWidth,
                    useLambdas, true),
       m_c0_metadata(sem, ctx, ptrSz, TrackingRawMemManager::g_MetadataByteWidth,
+                    useLambdas, true),
+      m_c1_metadata(sem, ctx, ptrSz, TrackingRawMemManager::g_MetadataByteWidth,
                     useLambdas, true) {}
 
 TrackingMemoryTuple::TrackingMemoryTuple(Bv2OpSem &sem, Bv2OpSemContext &ctx,
@@ -33,6 +35,8 @@ TrackingMemoryTuple::TrackingMemoryTuple(Bv2OpSem &sem, Bv2OpSemContext &ctx,
       m_a_metadata(sem, ctx, ptrSz, TrackingRawMemManager::g_MetadataByteWidth,
                    useLambdas, true),
       m_c0_metadata(sem, ctx, ptrSz, TrackingRawMemManager::g_MetadataByteWidth,
+                    useLambdas, true),
+      m_c1_metadata(sem, ctx, ptrSz, TrackingRawMemManager::g_MetadataByteWidth,
                     useLambdas, true) {}
 
 TrackingRawMemManager::TrackingRawMemManager(Bv2OpSem &sem,
@@ -171,7 +175,7 @@ TrackingRawMemManager::MemValTy TrackingRawMemManager::storeValueToMem(
     llvm_unreachable(nullptr);
     break;
   case Type::FixedVectorTyID:
-  case Type::ScalableVectorTyID:      
+  case Type::ScalableVectorTyID:
     errs() << "Error: store of vectors is not supported\n";
     llvm_unreachable(nullptr);
     break;
@@ -209,7 +213,7 @@ Expr TrackingRawMemManager::loadValueFromMem(
     llvm_unreachable(nullptr);
     break;
   case Type::FixedVectorTyID:
-  case Type::ScalableVectorTyID:      
+  case Type::ScalableVectorTyID:
     errs() << "Error: load of vectors is not supported\n";
     llvm_unreachable(nullptr);
     break;
@@ -353,7 +357,8 @@ Expr TrackingRawMemManager::coerce(Expr sort, Expr val) {
             hana::keys(m_submgrs)),
         [&](auto key) {
           // NOTE: For tracking memory, the metadata parts are havoc'ed to zero.
-          return hana::at_key(m_submgrs, key).zeroedMemory(); });
+          return hana::at_key(m_submgrs, key).zeroedMemory();
+        });
     auto r = hana::prepend(c, MAIN_MEM_MGR.coerce(sort->arg(0), val->arg(0)));
     BOOST_HANA_CONSTANT_ASSERT(hana::size(r) ==
                                TrackingMemoryTuple::GetTupleSize());
@@ -439,7 +444,7 @@ unsigned int TrackingRawMemManager::getMetadataMemWordSzInBits() {
   auto first_metadata_key = hana::keys(m_submgrs)[hana::size_c<1>];
   auto wordSz = hana::at_key(m_submgrs, first_metadata_key).wordSzInBits();
   // assert that all metadata has same word size
-  (void) sec_metadata_keys;
+  (void)sec_metadata_keys;
   BOOST_HANA_RUNTIME_ASSERT(hana::all_of(sec_metadata_keys, [&](auto key) {
     return hana::at_key(m_submgrs, key).wordSzInBits() == wordSz;
   }));
@@ -466,9 +471,10 @@ TrackingRawMemManager::MemValTy TrackingRawMemManager::setMetadata(
     auto current = hana::at(pair, hana::size_c<0>);
     auto key = hana::at(pair, hana::size_c<1>);
     if (current == index) {
+      // assume val is wordSz bits long
+      auto byteWidth = hana::at_key(m_submgrs, key).wordSzInBytes();
       return hana::at_key(m_submgrs, key)
-          .storeIntToMem(val, p, mem.getElementVal(index), g_MetadataByteWidth,
-                         0);
+          .storeIntToMem(val, p, mem.getElementVal(index), byteWidth, 0);
     } else {
       return mem.getElementVal(current);
     }

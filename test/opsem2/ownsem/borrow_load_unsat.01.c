@@ -1,6 +1,7 @@
 //; RUN: %sea "%s" -g -S --own-sem 2>&1 | OutputCheck %s
 // CHECK: ^unsat$
 #include "seahorn/seahorn.h"
+#include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -9,8 +10,8 @@ extern char nd_char();
 extern void pretendEscapeToMemory(char *);
 extern __declspec(noalias) void sea_printf(const char *format, ...);
 
-static unsigned CLEAN = 0;
-static unsigned TAINT = 1;
+static uint32_t CLEAN = 0;
+static uint32_t TAINT = 1;
 
 typedef struct handle_t {
   uint32_t *own_uint32ptr;
@@ -24,7 +25,7 @@ int main() {
   uint32_t *stuff = (uint32_t *)malloc(sizeof(uint32_t));
   SEA_MKOWN(stuff);
   *stuff = CLEAN;
-  h0->own_uint32ptr = stuff;
+  SEA_MOVE2MEM(&h0->own_uint32ptr, stuff);
   h0->valid = false;
   pretendEscapeToMemory((char *)h0);
   uint32_t *bor_ptr;

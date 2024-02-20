@@ -34,6 +34,7 @@ enum class SeaBuiltinsOp {
   MK_OWN,
   MK_SHR,
   BOR_MKBOR,
+  BOR_MKBOR_PART,
   BOR_MEM2REG, /* sea.bor_mem2reg */
   MOV_REG2MEM, /* sea.bor_reg2mem */
   BOR_MKSUC,
@@ -70,6 +71,7 @@ class SeaBuiltinsInfo {
   llvm::Function *mkMkOwn(llvm::Module &M);
   llvm::Function *mkMkShr(llvm::Module &M);
   llvm::Function *mkBorMkBor(llvm::Module &M);
+  llvm::Function *mkBorMkBorPart(llvm::Module &M);
   llvm::Function *mkBorMkSuc(llvm::Module &M);
   llvm::Function *mkBorMem2Reg(llvm::Module &M);
   llvm::Function *mkMovReg2Mem(llvm::Module &M);

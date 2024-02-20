@@ -26,6 +26,7 @@ enum class MetadataKind {
   WRITE = 1,
   ALLOC = 2,
   CUSTOM0 = 3,
+  CUSTOM1 = 4,
 };
 
 namespace MemoryFeatures {
@@ -788,10 +789,10 @@ OpSemMemManager *mkExtraWideMemManager(Bv2OpSem &sem, Bv2OpSemContext &ctx,
                                        unsigned ptrSz, unsigned wordSz,
                                        bool useLambdas = false);
 
-OpSemMemManager *mkFatMemEWWTManager(Bv2OpSem &sem, Bv2OpSemContext &ctx,
+/* OpSemMemManager *mkFatMemEWWTManager(Bv2OpSem &sem, Bv2OpSemContext &ctx,
                                      unsigned ptrSz, unsigned wordSz,
                                      bool useLambdas = false);
-
+ */
 /// Evaluates constant expressions
 class ConstantExprEvaluator {
   const DataLayout &m_td;

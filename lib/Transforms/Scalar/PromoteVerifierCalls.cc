@@ -191,7 +191,7 @@ bool PromoteVerifierCalls::runOnFunction(Function &F) {
       {"sea_die", {m_die, 1}},
       {"sea_mov", {m_move, 1}},
       {"sea_bor_mem2reg", {m_bor_mem2reg, 1}},
-      {"sea_mov_reg2mem", {m_mov_reg2mem, 1}},
+      {"sea_mov_reg2mem", {m_mov_reg2mem, 2}},
       {"sea_set_fatptr_slot", {m_set_fatptr_slot, 3}},
       {"sea_get_fatptr_slot", {m_get_fatptr_slot, 2}},
   };

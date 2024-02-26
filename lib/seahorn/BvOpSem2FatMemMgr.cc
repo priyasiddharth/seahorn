@@ -21,8 +21,8 @@ static llvm::cl::opt<unsigned>
 
 namespace seahorn {
 namespace details {
-
-template <class T> unsigned FatMemManagerCore<T>::g_FatMemSlots = FatMemSlots;
+ 
+template <class T> unsigned FatMemManagerCore<T>::g_FatMemSlots;
 
 /// \brief Converts a raw ptr to fat ptr with default value for fat
 template <class T>
@@ -31,7 +31,7 @@ FatMemManagerCore<T>::mkFatPtr(MainPtrTy mainPtr) const {
   llvm::SmallVector<AnyPtrTy, 8> ptrVals;
   ptrVals.push_back(mainPtr);
   // assign fresh (nd) values to fat slots
-  for (unsigned i = 0; i < FatMemSlots; i++) {
+  for (unsigned i = 0; i < g_FatMemSlots; i++) {
     llvm::SmallString<100> tempStorage;
     auto fullName = m_fatMemBaseName + "slot" + std::to_string(i);
     auto fullNameExpr =
@@ -62,9 +62,9 @@ FatMemManagerCore<T>::updateFatPtr(MainPtrTy mainPtr, PtrTy fat) const {
     return mkFatPtr(mainPtr);
 
   llvm::SmallVector<AnyPtrTy, 8> kids;
-  assert(fat.v()->arity() == FatMemSlots + 1);
+  assert(fat.v()->arity() == g_FatMemSlots + 1);
   kids.push_back(mainPtr);
-  for (unsigned i = 1; i <= FatMemSlots; i++) {
+  for (unsigned i = 1; i <= g_FatMemSlots; i++) {
     kids.push_back(fat.v()->arg(i));
   }
   return PtrTy(strct::mk(kids));
@@ -112,7 +112,7 @@ template <class T>
 typename FatMemManagerCore<T>::PtrSortTy FatMemManagerCore<T>::ptrSort() const {
   llvm::SmallVector<AnyPtrSortTy, 8> sorts;
   sorts.push_back(m_main.ptrSort());
-  for (unsigned i = 0; i < FatMemSlots; i++) {
+  for (unsigned i = 0; i < g_FatMemSlots; i++) {
     sorts.push_back(m_ctx.alu().intTy(g_slotBitWidth));
   }
   return PtrSortTy(sorts);
@@ -223,7 +223,7 @@ typename FatMemManagerCore<T>::PtrSortTy
 FatMemManagerCore<T>::mkPtrRegisterSort(const Instruction &inst) const {
   llvm::SmallVector<AnyPtrSortTy, 8> sorts;
   sorts.push_back(m_main.mkPtrRegisterSort(inst));
-  for (unsigned i = 0; i < FatMemSlots; i++) {
+  for (unsigned i = 0; i < g_FatMemSlots; i++) {
     sorts.push_back(m_ctx.alu().intTy(g_slotBitWidth));
   }
   return PtrSortTy(sorts);
@@ -279,7 +279,7 @@ template <class T> Expr FatMemManagerCore<T>::coerce(Expr sort, Expr val) {
     llvm::SmallVector<Expr, 8> kids;
     assert(isOp<STRUCT_TY>(sort));
     assert(sort->arity() == val->arity());
-    assert(sort->arity() == 1 + FatMemSlots);
+    assert(sort->arity() == 1 + g_FatMemSlots);
     kids.push_back(m_main.coerce(sort->arg(0), val->arg(0)));
     for (unsigned i = 1, sz = val->arity(); i < sz; ++i)
       kids.push_back(m_slots[i - 1].coerce(sort->arg(i), val->arg(i)));
@@ -314,7 +314,7 @@ FatMemManagerCore<T>::loadPtrFromMem(PtrTy ptr, MemValTy mem, unsigned byteSz,
       m_main.loadPtrFromMem(mkMainPtr(ptr), mkMainMem(mem), byteSz, align);
   ptrVals.push_back(rawVal);
   RawPtrTy rawPtr = getAddressable(ptr);
-  for (unsigned i = 1; i <= FatMemSlots; i++) {
+  for (unsigned i = 1; i <= g_FatMemSlots; i++) {
     auto slotVal = m_slots[i - 1].loadIntFromMem(rawPtr, mem.getSlot(i),
                                                  g_slotByteWidth, align);
     ptrVals.push_back(slotVal);
@@ -351,7 +351,7 @@ FatMemManagerCore<T>::storeIntToMem(Expr _val, PtrTy ptr, MemValTy mem,
   assert(!strct::isStructVal(_val));
   memVals.push_back(m_main.storeIntToMem(_val, mkMainPtr(ptr), mkMainMem(mem),
                                          byteSz, align));
-  for (unsigned i = 1; i <= FatMemSlots; i++) {
+  for (unsigned i = 1; i <= g_FatMemSlots; i++) {
     memVals.push_back(mem.getSlot(i));
   }
   return mkFatMem(memVals);
@@ -369,7 +369,7 @@ FatMemManagerCore<T>::storePtrToMem(PtrTy val, PtrTy ptr, MemValTy mem,
                                            mkMainMem(mem), byteSz, align);
   memVals.push_back(main);
   RawPtrTy rawPtr = getAddressable(ptr);
-  for (unsigned i = 1; i <= FatMemSlots; i++) {
+  for (unsigned i = 1; i <= g_FatMemSlots; i++) {
     MainMemValTy slotVal = m_slots[i - 1].storeIntToMem(
         val.getSlot(i), rawPtr, mem.getSlot(i), g_slotByteWidth, align);
     memVals.push_back(slotVal);
@@ -478,7 +478,7 @@ FatMemManagerCore<T>::MemSet(PtrTy ptr, Expr _val, unsigned len, MemValTy mem,
   llvm::SmallVector<AnyMemValTy, 8> memVals;
   memVals.push_back(
       m_main.MemSet(mkMainPtr(ptr), _val, len, mkMainMem(mem), align));
-  for (unsigned i = 1; i <= FatMemSlots; i++) {
+  for (unsigned i = 1; i <= g_FatMemSlots; i++) {
     memVals.push_back(mem.getSlot(i));
   }
   return mkFatMem(memVals);
@@ -491,7 +491,7 @@ FatMemManagerCore<T>::MemSet(PtrTy ptr, Expr _val, Expr len, MemValTy mem,
   llvm::SmallVector<AnyMemValTy, 8> memVals;
   memVals.push_back(
       m_main.MemSet(mkMainPtr(ptr), _val, len, mkMainMem(mem), align));
-  for (unsigned i = 1; i <= FatMemSlots; i++) {
+  for (unsigned i = 1; i <= g_FatMemSlots; i++) {
     memVals.push_back(mem.getSlot(i));
   }
   return mkFatMem(memVals);
@@ -509,7 +509,7 @@ FatMemManagerCore<T>::MemCpy(PtrTy dPtr, PtrTy sPtr, unsigned len,
                                   align));
   RawPtrTy rawPtrDst = getAddressable(dPtr);
   RawPtrTy rawPtrSrc = getAddressable(sPtr);
-  for (unsigned i = 1; i <= FatMemSlots; i++) {
+  for (unsigned i = 1; i <= g_FatMemSlots; i++) {
     memVals.push_back(m_slots[i - 1].MemCpy(rawPtrDst, rawPtrSrc, len,
                                             memTrsfrRead.getSlot(i),
                                             memRead.getSlot(i), align));
@@ -529,7 +529,7 @@ FatMemManagerCore<T>::MemCpy(PtrTy dPtr, PtrTy sPtr, Expr len,
                                   align));
   RawPtrTy rawPtrDst = getAddressable(dPtr);
   RawPtrTy rawPtrSrc = getAddressable(sPtr);
-  for (unsigned i = 1; i <= FatMemSlots; i++) {
+  for (unsigned i = 1; i <= g_FatMemSlots; i++) {
     memVals.push_back(m_slots[i - 1].MemCpy(rawPtrDst, rawPtrSrc, len,
                                             memTrsfrRead.getSlot(i),
                                             memRead.getSlot(i), align));
@@ -546,7 +546,7 @@ FatMemManagerCore<T>::MemFill(PtrTy dPtr, char *sPtr, unsigned len,
   llvm::SmallVector<AnyMemValTy, 8> memVals;
   memVals.push_back(
       m_main.MemFill(mkMainPtr(dPtr), sPtr, len, mkMainMem(mem), align));
-  for (unsigned i = 1; i <= FatMemSlots; i++) {
+  for (unsigned i = 1; i <= g_FatMemSlots; i++) {
     memVals.push_back(mem.getSlot(i));
   }
   return mkFatMem(memVals);
@@ -630,7 +630,7 @@ void FatMemManagerCore<T>::onFunctionEntry(const Function &fn) {
   /// \brief Called when a module entered for the first time
 template <class T> void FatMemManagerCore<T>::onModuleEntry(const Module &M) {
   m_main.onModuleEntry(M);
-  for (unsigned i = 0; i < FatMemSlots; i++) {
+  for (unsigned i = 0; i < g_FatMemSlots; i++) {
     m_slots[i].onModuleEntry(M);
   }
 }
@@ -652,7 +652,7 @@ typename FatMemManagerCore<T>::MemValTy
 FatMemManagerCore<T>::zeroedMemory() const {
   llvm::SmallVector<AnyMemValTy, 8> memVals;
   memVals.push_back(m_main.zeroedMemory());
-  for (unsigned i = 1; i <= FatMemSlots; i++) {
+  for (unsigned i = 1; i <= g_FatMemSlots; i++) {
     memVals.push_back(m_slots[i - 1].zeroedMemory());
   }
   return mkFatMem(memVals);
@@ -667,10 +667,10 @@ Expr FatMemManagerCore<T>::getFatData(PtrTy p, unsigned SlotIdx) {
 template <class T>
 typename FatMemManagerCore<T>::PtrTy
 FatMemManagerCore<T>::setFatData(PtrTy p, unsigned slotIdx, Expr data) {
-  assert(slotIdx < FatMemSlots);
+  assert(slotIdx < g_FatMemSlots);
   llvm::SmallVector<AnyPtrTy, 8> ptrVals;
   ptrVals.push_back(p.getMain());
-  for (unsigned i = 1; i <= FatMemSlots; i++) {
+  for (unsigned i = 1; i <= g_FatMemSlots; i++) {
     if (slotIdx + 1 == i) {
       ptrVals.push_back(data);
     } else {
@@ -688,12 +688,12 @@ FatMemManagerCore<T>::getAddressable(PtrTy p) const {
 
 template <class T> bool FatMemManagerCore<T>::isPtrTyVal(Expr e) const {
   // struct with raw ptr + fat slots
-  return e && strct::isStructVal(e) && e->arity() == (1 + FatMemSlots);
+  return e && strct::isStructVal(e) && e->arity() == (1 + g_FatMemSlots);
 }
 
 template <class T> bool FatMemManagerCore<T>::isMemVal(Expr e) const {
   // struct with raw ptr + fat slots
-  return e && strct::isStructVal(e) && e->arity() == (1 + FatMemSlots);
+  return e && strct::isStructVal(e) && e->arity() == (1 + g_FatMemSlots);
 }
 
 template <class T>
@@ -716,7 +716,7 @@ FatMemManagerCore<T>::memsetMetadata(MetadataKind kind, PtrTy ptr,
   llvm::SmallVector<AnyMemValTy, 8> memVals;
   memVals.push_back(
       m_main.memsetMetadata(kind, ptr.getMain(), len, memIn.getMain(), val));
-  for (unsigned i = 1; i <= FatMemSlots; i++) {
+  for (unsigned i = 1; i <= g_FatMemSlots; i++) {
     memVals.push_back(memIn.getSlot(i));
   }
   return mkFatMem(memVals);
@@ -729,7 +729,7 @@ FatMemManagerCore<T>::memsetMetadata(MetadataKind kind, PtrTy ptr, Expr len,
   llvm::SmallVector<AnyMemValTy, 8> memVals;
   memVals.push_back(
       m_main.memsetMetadata(kind, ptr.getMain(), len, memIn.getMain(), val));
-  for (unsigned i = 1; i <= FatMemSlots; i++) {
+  for (unsigned i = 1; i <= g_FatMemSlots; i++) {
     memVals.push_back(memIn.getSlot(i));
   }
   return mkFatMem(memVals);
@@ -762,7 +762,7 @@ FatMemManagerCore<T>::setMetadata(MetadataKind kind, PtrTy ptr, MemValTy mem,
   llvm::SmallVector<AnyMemValTy, 8> memVals;
   auto mainOut = m_main.setMetadata(kind, ptr.getMain(), mem.getMain(), val);
   memVals.push_back(mainOut);
-  for (unsigned i = 1; i <= FatMemSlots; i++) {
+  for (unsigned i = 1; i <= g_FatMemSlots; i++) {
     memVals.push_back(mem.getSlot(i));
   }
   return mkFatMem(memVals);
@@ -783,7 +783,9 @@ FatMemManagerCore<T>::FatMemManagerCore(Bv2OpSem &sem, Bv2OpSemContext &ctx,
       m_main(sem, ctx, ptrSz, wordSz, useLambdas),
       m_fatMemBaseName("sea.fatmem"),
       m_slots(FatMemSlots,
-              RawMemManager(sem, ctx, ptrSz, g_slotByteWidth, useLambdas)) {}
+              RawMemManager(sem, ctx, ptrSz, g_slotByteWidth, useLambdas)) {
+                g_FatMemSlots = FatMemSlots;
+              }
 
 OpSemMemManager *mkFatMemManager(Bv2OpSem &sem, Bv2OpSemContext &ctx,
                                  unsigned ptrSz, unsigned wordSz,

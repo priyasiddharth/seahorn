@@ -63,35 +63,43 @@ extern bool nd_bool(void);
 #define PROPHECY_SLOT 1
 #define OWNERSHIP_SLOT 2
 
+#ifdef OWNSEM_BORCHK
+#define borchk_assert(x) sassert(x)
+#define borchk_assume(x) assume(x)
+#else 
+#define borchk_assert(x) ;
+#define borchk_assume(x) ;
+#endif 
+
 #define SEA_SET_FATPTR_SLOT0(SRC, VAL)                                         \
   do {                                                                         \
-    (SRC) = (typeof(SRC))sea_set_fatptr_slot((char *)(SRC), 0, (uint64_t)VAL); \
+    (SRC) = cast_to(SRC, sea_set_fatptr_slot((char *)(SRC), 0, (uint64_t)VAL)); \
   } while (0);
 
-#define SEA_SET_FATPTR_SLOT1(SRC, VAL)                                         \
+#define SEA_SET_FATPTR_SLOT1(SRC, VAL)                                          \
   do {                                                                         \
-    (SRC) = (typeof(SRC))sea_set_fatptr_slot((char *)(SRC), 1, (uint64_t)VAL); \
+    (SRC) = cast_to(SRC, sea_set_fatptr_slot((char *)(SRC), 1, (uint64_t)VAL)); \
   } while (0);
 
 #define SEA_SET_FATPTR_SLOT2(SRC, VAL)                                         \
   do {                                                                         \
-    (SRC) = (typeof(SRC))sea_set_fatptr_slot((char *)(SRC), 2, (uint64_t)VAL); \
+    (SRC) = cast_to(SRC, sea_set_fatptr_slot((char *)(SRC), 2, (uint64_t)VAL)); \
   } while (0);
 
 #define SEA_SET_FATPTR_SLOT(SRC, SLOT, VAL)                                    \
   do {                                                                         \
     (SRC) =                                                                    \
-        (typeof(SRC))sea_set_fatptr_slot((char *)(SRC), SLOT, (uint64_t)VAL);  \
+        cast_to(SRC, sea_set_fatptr_slot((char *)SRC, SLOT, (uint64_t)VAL));  \
   } while (0);
 
 #define SEA_GET_FATPTR_SLOT0(SRC, VAL)                                         \
   do {                                                                         \
-    (VAL) = cast_to(VAL, sea_get_fatptr_slot((char *)(SRC), 0));               \
+    (VAL) = cast_to(VAL, sea_get_fatptr_slot((char *)SRC, 0));               \
   } while (0);
 
 #define SEA_GET_FATPTR_SLOT1(SRC, VAL)                                         \
   do {                                                                         \
-    (VAL) = (typeof(VAL))sea_get_fatptr_slot((char *)(SRC), 1);                \
+    (VAL) = cast_to(VAL, sea_get_fatptr_slot((char *)SRC, 1));                \
   } while (0);
 
 #define SEA_GET_FATPTR_SLOT2(SRC, VAL)                                         \
@@ -101,7 +109,7 @@ extern bool nd_bool(void);
 
 #define SEA_GET_FATPTR_SLOT(SRC, SLOT, VAL)                                    \
   do {                                                                         \
-    (VAL) = (typeof(VAL))sea_get_fatptr_slot((char *)(SRC), SLOT);             \
+    (VAL) = cast_to(VAL, sea_get_fatptr_slot((char *)SRC, SLOT));             \
   } while (0);
 
 #define SEA_GET_LENT(SRC, VAL)                                                 \
@@ -198,7 +206,7 @@ extern bool nd_bool(void);
 // NOTE: intrinsic
 #define SEA_WRITE_CACHE(SRC, VAL)                                              \
   do {                                                                         \
-    SEA_SET_FATPTR_SLOT0((SRC), (VAL));                                        \
+    SEA_SET_FATPTR_SLOT0(SRC, (VAL));                                        \
   } while (0)
 
 // NOTE: intrinsic
@@ -213,7 +221,7 @@ extern bool nd_bool(void);
     uint64_t src_own_data;                                                     \
     SEA_GET_FATPTR_SLOT(SRC, OWNERSHIP_SLOT, src_own_data);                    \
     bool is_lent = GET_LENT(src_own_data);                                     \
-    sassert(!is_lent);                                                         \
+    borchk_assert(!is_lent);                                                   \
     (BOR) = cast_to(BOR, sea_bor_mkbor((char *)SRC));                          \
     (SRC) = cast_to(SRC, sea_bor_mksuc((char *)SRC));                          \
     uint64_t brval;                                                            \
@@ -259,10 +267,10 @@ extern bool nd_bool(void);
     assume(nd_retval == cacheval);                                             \
     bool lent;                                                                 \
     SEA_GET_LENT((char *)SRC, lent);                                           \
-    sassert(lent == false);                                                    \
+    borchk_assert(lent == false);                                              \
     bool held;                                                                 \
     SEA_GET_HELD((char *)SRC, held);                                           \
-    assume(held == false);                                                     \
+    borchk_assume(held == false);                                              \
     sea_die((char *)(SRC));                                                    \
   } while (0)
 

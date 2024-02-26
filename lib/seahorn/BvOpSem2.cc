@@ -862,6 +862,7 @@ public:
   void visitBranchSentinel(CallBase &CB) {}
 
   void visitGetShadowMem(CallBase &CB) {
+    Stats::count("opsem.getShadowMem");
     if (!m_ctx.getMemReadRegister()) {
       LOG("opsem", ERR << "No read register found - check if corresponding"
                           "shadow instruction is present.");
@@ -1224,10 +1225,12 @@ public:
     } else if (f->getName().equals("__sea_get_extptr_slot0_hm")) {
       Expr ptr = lookup(*CB.getOperand(0));
       Expr res = m_ctx.mem().getFatData(ptr, 0 /*slot */);
+      res =  m_ctx.shouldSimplifyNonMem() ? m_ctx.simplify(res) : res;
       setValue(CB, res);
     } else if (f->getName().equals("__sea_get_extptr_slot1_hm")) {
       Expr ptr = lookup(*CB.getOperand(0));
       Expr res = m_ctx.mem().getFatData(ptr, 1 /*slot */);
+      res =  m_ctx.shouldSimplifyNonMem() ? m_ctx.simplify(res) : res;
       setValue(CB, res);
     } else if (f->getName().equals("__sea_copy_extptr_slots_hm")) {
       // convention is copy(dst, src)
@@ -1238,6 +1241,7 @@ public:
       Expr slot1_data = m_ctx.mem().getFatData(src, 1 /*slot */);
       Expr res = m_ctx.mem().setFatData(dst, 0 /*slot */, slot0_data);
       res = m_ctx.mem().setFatData(res, 1 /*slot */, slot1_data);
+      res =  m_ctx.shouldSimplifyNonMem() ? m_ctx.simplify(res) : res;
       setValue(CB, res);
     } else if (f->getName().equals("__sea_recover_pointer_hm")) {
       Expr fat_ptr = lookup(*CB.getOperand(0));
@@ -1262,6 +1266,7 @@ public:
       }
       size_t slotNum = m_ctx.alu().toNum(slot).get_ui();
       Expr res = m_ctx.mem().getFatData(ptr, slotNum);
+      res =  m_ctx.shouldSimplifyNonMem() ? m_ctx.simplify(res) : res;
       setValue(CB, res);
     }
   }

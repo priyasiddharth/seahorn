@@ -1,14 +1,39 @@
 #include "seahorn/DfCoiAnalysis.hh"
 
 #include "seahorn/Support/SeaLog.hh"
+#include "seahorn/Support/SeaDebug.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/IntrinsicInst.h"
+#include "llvm/IR/DebugInfo.h"
+#include "llvm/IR/DebugLoc.h"
 #include <boost/hana.hpp>
 #include <cassert>
+#include <map>
 
 using namespace llvm;
 namespace seahorn {
+
+void DfCoiAnalysis::printLocAndInsert(Value *&&v) {
+  LOG("opsem.dfcoi", 
+  if (auto *inst = llvm::dyn_cast<llvm::Instruction>(v)) {
+        // Now we have an instruction, check if it has a debug location.
+    if (auto dloc = inst->getDebugLoc()) {
+      unsigned Line = dloc.getLine();
+      unsigned Col = dloc.getCol();
+      StringRef File = (*dloc).getFilename();
+      INFO << "in coi: " << *inst << " at File=" << File
+                << " Line=" << Line << " col=" << Col << "\n";
+    } else {
+      INFO << "in coi: " << *inst << "\n";  
+    }
+/*   else {
+    INFO << "in coi: " << *v << "\n";  
+  } */
+  };
+  );
+  m_coi.insert(v);     
+}
 
 void DfCoiAnalysis::analyze(User &user) {
   constexpr auto shadowStoreSucc = boost::hana::make_set(
@@ -21,14 +46,14 @@ void DfCoiAnalysis::analyze(User &user) {
     return;
 
   SmallVector<User *, 16> workList;
-
+  std::map<Value *, Value *> influencedToErMap;
   workList.push_back(&user);
   while (!workList.empty()) {
     User &u = *workList.back();
     workList.pop_back();
     if (m_coi.count(&u))
       continue;
-    m_coi.insert(&u);
+    printLocAndInsert(&u);
 
     if (auto *LI = dyn_cast<LoadInst>(&u)) {
       auto *v = analyzeLoad(*LI);
@@ -83,7 +108,7 @@ void DfCoiAnalysis::analyze(User &user) {
       if (auto *user_op = dyn_cast<User>(val))
         workList.push_back(user_op);
       else
-        m_coi.insert(val);
+        printLocAndInsert(std::move(val));
     }
   }
 }

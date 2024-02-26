@@ -26,7 +26,7 @@ class DfCoiAnalysis {
   llvm::CallInst *analyzeLoad(llvm::LoadInst &LI);
   llvm::CallInst *analyzeMemTransfer(llvm::MemTransferInst &MI);
   llvm::CallInst *analyzeAllocaInst(llvm::AllocaInst &AI);
-
+  void printLocAndInsert(llvm::Value *&&v);
 public:
   DfCoiAnalysis() {}
 

@@ -96,11 +96,13 @@ public:
                                  TrackingMemoryTuple::GetTupleSize());
       hana::for_each(
           args, [&](auto element) { assert(!strct::isStructVal(element)); });
+      #ifndef NDEBUG
       hana::for_each(args, [&](auto element) {
         TypeChecker tc;
         tc.typeOf(element);
         assert(tc.getErrorExp() == nullptr);
       });
+      #endif
       auto a = hana::unpack(args, [](auto... i) {
         return std::array<RawMemValTy, sizeof...(i)>{{std::move(i)...}};
       });
@@ -116,11 +118,13 @@ public:
                                  TrackingMemoryTuple::GetTupleSize());
       hana::for_each(
           args, [&](auto element) { assert(!strct::isStructVal(element)); });
+      #ifndef NDEBUG    
       hana::for_each(args, [&](auto element) {
         TypeChecker tc;
         tc.typeOf(element);
         assert(tc.getErrorExp() == nullptr);
       });
+      #endif
       auto a = hana::unpack(args, [](auto... i) {
         return std::array<RawMemValTy, sizeof...(i)>{{i...}};
       });

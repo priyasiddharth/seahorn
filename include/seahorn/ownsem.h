@@ -53,11 +53,10 @@ extern bool nd_bool(void);
 #define GET_HELD(x) GET_BIT(x, HELD_BIT)
 #define SET_HELD(x, val) SET_BIT(x, HELD_BIT, val)
 
-/**
- * FATPTR SLOT MAP
- * slot0 -- carried val
- * slot1 -- returned val at borrowed ptr
- * slot2 -- borrow/ownership checking
+ /* FATPTR SLOT MAP
+  * slot0 -- carried val
+  * slot1 -- returned val at borrowed ptr
+  * slot2 -- borrow/ownership checking
  **/
 #define CARRY_SLOT 0
 #define PROPHECY_SLOT 1
@@ -104,7 +103,7 @@ extern bool nd_bool(void);
 
 #define SEA_GET_FATPTR_SLOT2(SRC, VAL)                                         \
   do {                                                                         \
-    (VAL) = (typeof(VAL))sea_get_fatptr_slot((char *)(SRC), 2);                \
+    (VAL) =  cast_to(VAL, sea_get_fatptr_slot((char *)(SRC), 2));              \
   } while (0);
 
 #define SEA_GET_FATPTR_SLOT(SRC, SLOT, VAL)                                    \
@@ -169,6 +168,23 @@ extern bool nd_bool(void);
     SEA_SET_LENT(SRC, false);                                                  \
   } while (0)
 
+#define SEA_MKOWN_FAST(SRC)                                                    \
+  do {                                                                         \
+    uint64_t nd_slot0 = nd_uint64t();                                          \
+    uint64_t nd_slot1 = nd_uint64t();                                          \
+    char *intmd0, *intmd1, *intmd2;                                            \
+    intmd0 = sea_mkown((char *)(SRC));                                         \
+    SEA_SET_FATPTR_SLOT0(intmd0, nd_slot0);                                    \
+    SEA_SET_FATPTR_SLOT1(intmd0, nd_slot1);                                    \
+    (SRC) = (typeof(SRC))intmd0;                                               \
+  } while (0)
+
+
+#define SEA_FK_MKOWN(SRC)                                                      \
+  do {                                                                         \
+    SRC = (typeof(SRC)) sea_mkown((char *)(SRC));                              \
+  } while (0)
+
 // NOTE: intrinsic
 #define SEA_MKSHR(SRC)                                                         \
   do {                                                                         \
@@ -216,7 +232,33 @@ extern bool nd_bool(void);
   } while (0)
 
 // NOTE: intrinsic
-#define SEA_BORROW(BOR, SRC)                                                   \
+#define SEA_FK_BORROW(BOR, SRC)                                                \
+  do {                                                                         \
+    (BOR) = cast_to(BOR, sea_bor_mkbor((char *)SRC));                          \
+    (SRC) = cast_to(SRC, sea_bor_mksuc((char *)SRC));                          \
+  } while(0);
+
+
+#ifdef OWNSEM_BORCHK 
+#define SEA_BORROW(BOR, SRC) SEA_BORROW_CHK(BOR, SRC)
+#else
+#define SEA_BORROW(BOR, SRC) SEA_BORROW_CHK(BOR, SRC) 
+#endif
+
+
+#define SEA_BORROW_FAST(BOR, SRC)                                              \
+  do {                                                                         \
+    (BOR) = cast_to(BOR, sea_bor_mkbor((char *)SRC));                          \
+    (SRC) = cast_to(SRC, sea_bor_mksuc((char *)SRC));                          \
+    uint64_t brval;                                                            \
+    SEA_GET_FATPTR_SLOT0((SRC), brval);                                        \
+    SEA_SET_FATPTR_SLOT0((BOR), brval);                                        \
+    uint64_t ndval = nd_uint64t();                                             \
+    SEA_SET_FATPTR_SLOT1((BOR), ndval)                                         \
+    SEA_SET_FATPTR_SLOT0((SRC), ndval);                                        \
+  } while(0);
+
+#define SEA_BORROW_CHK(BOR, SRC)                                               \
   do {                                                                         \
     uint64_t src_own_data;                                                     \
     SEA_GET_FATPTR_SLOT(SRC, OWNERSHIP_SLOT, src_own_data);                    \
@@ -226,13 +268,11 @@ extern bool nd_bool(void);
     (SRC) = cast_to(SRC, sea_bor_mksuc((char *)SRC));                          \
     uint64_t brval;                                                            \
     SEA_GET_FATPTR_SLOT0((SRC), brval);                                        \
-    uint64_t retval;                                                           \
-    SEA_GET_FATPTR_SLOT1((SRC), retval);                                       \
     SEA_SET_FATPTR_SLOT0((BOR), brval);                                        \
     uint64_t ndval = nd_uint64t();                                             \
     SEA_SET_FATPTR_SLOT1((BOR), ndval)                                         \
     SEA_SET_FATPTR_SLOT0((SRC), ndval);                                        \
-    /*borrow logic: choose actio: */                                           \
+    /*borrow logic: choose action: */                                          \
     /*borrow logic: SRC gives new loan or SRC transfers held loan  */          \
     bool create_loan = nd_bool();                                              \
     if (create_loan) {                                                         \
@@ -249,6 +289,11 @@ extern bool nd_bool(void);
       uint64_t new_own_data = SET_HELD(own_data, false);                       \
       SEA_SET_FATPTR_SLOT(SRC, OWNERSHIP_SLOT, new_own_data);                  \
     }                                                                          \
+    /* Borrow lent bit should be false */                                      \
+    uint64_t bor_data;                                                         \
+    SEA_GET_FATPTR_SLOT(BOR, OWNERSHIP_SLOT, bor_data);                        \
+    uint64_t new_bor_data = SET_LENT(bor_data, false);                         \
+    SEA_SET_FATPTR_SLOT(BOR, OWNERSHIP_SLOT, new_bor_data);                    \
   } while (0);
 
 #define SEA_MOVE2MEM(PTR_TO_SRC_PTR, SRC)                                      \
@@ -257,8 +302,26 @@ extern bool nd_bool(void);
     *(PTR_TO_SRC_PTR) = (typeof(SRC))(SRC);                                    \
   } while (0);
 
+#ifdef OWNSEM_BORCHK 
+#define SEA_DIE(SRC) SEA_DIE_CHK(SRC)
+#else
+#define SEA_DIE(SRC) SEA_DIE_FAST(SRC) 
+#endif
+
 // NOTE: intrinsic
-#define SEA_DIE(SRC)                                                           \
+#define SEA_DIE_FAST(SRC)                                                      \
+  do {                                                                         \
+    uint64_t nd_retval;                                                        \
+    SEA_GET_FATPTR_SLOT1((char *)(SRC), nd_retval);                            \
+    uint64_t cacheval;                                                         \
+    SEA_GET_FATPTR_SLOT0((char *)(SRC), cacheval);                             \
+    assume(nd_retval == cacheval);                                             \
+    sea_die((char *)(SRC));                                                    \
+  } while (0);
+
+
+// NOTE: intrinsic
+#define SEA_DIE_CHK(SRC)                                                       \
   do {                                                                         \
     uint64_t nd_retval;                                                        \
     SEA_GET_FATPTR_SLOT1((char *)(SRC), nd_retval);                            \

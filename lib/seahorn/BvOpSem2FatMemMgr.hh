@@ -460,5 +460,11 @@ OpSemMemManager *mkFatEWWTManager(Bv2OpSem &sem, Bv2OpSemContext &ctx,
                                   bool useLambdas);
 using FatEWWTMemManager =
     OpSemMemManagerMixin<FatMemManagerCore<EWWTMemManager>>;
+// FatMemManager with ExtraWide and Tracking components
+OpSemMemManager *mkFatEWWManager(Bv2OpSem &sem, Bv2OpSemContext &ctx,
+                                  unsigned ptrSz, unsigned wordSz,
+                                  bool useLambdas);
+using FatEWWMemManager =
+    OpSemMemManagerMixin<FatMemManagerCore<EWWMemManager>>;    
 } // namespace details
 } // namespace seahorn

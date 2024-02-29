@@ -100,11 +100,11 @@ RawMemManagerCore::RawMemManagerCore(Bv2OpSem &sem, Bv2OpSemContext &ctx,
     m_memRepr =
         std::make_unique<OpSemMemArrayRepr>(*this, ctx, MemCpyUnrollCount);
 }
-
+  // TODO: don't hardcode args
   RawMemManagerCore::RawMemManagerCore(const RawMemManagerCore &orig)
     :  RawMemManager::RawMemManagerCore(orig.sem(),orig.ctx(),
                       orig.ptrSizeInBytes(), orig.wordSizeInBytes(),
-                      true /* useLambdas */) {}
+                      true /* useLambdas */, /* ignoreAlignment =*/ true) {}
 
 
 /// \brief Creates a non-deterministic pointer that is aligned

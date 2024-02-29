@@ -783,7 +783,7 @@ FatMemManagerCore<T>::FatMemManagerCore(Bv2OpSem &sem, Bv2OpSemContext &ctx,
       m_main(sem, ctx, ptrSz, wordSz, useLambdas),
       m_fatMemBaseName("sea.fatmem"),
       m_slots(FatMemSlots,
-              RawMemManager(sem, ctx, ptrSz, g_slotByteWidth, useLambdas)) {
+              RawMemManager(sem, ctx, ptrSz, g_slotByteWidth, useLambdas, /* ignoreAlignment =*/ true)) {
                 g_FatMemSlots = FatMemSlots;
               }
 
@@ -800,6 +800,14 @@ OpSemMemManager *mkFatEWWTManager(Bv2OpSem &sem, Bv2OpSemContext &ctx,
                                   bool useLambdas) {
   return new FatEWWTMemManager(sem, ctx, ptrSz, wordSz, useLambdas);
 }
+
+// FatMemManager with ExtraWide component
+OpSemMemManager *mkFatEWWManager(Bv2OpSem &sem, Bv2OpSemContext &ctx,
+                                  unsigned ptrSz, unsigned wordSz,
+                                  bool useLambdas) {
+  return new FatEWWMemManager(sem, ctx, ptrSz, wordSz, useLambdas);
+}
+
 
 template class FatMemManagerCore<RawMemManager>;
 template class OpSemMemManagerMixin<FatMemManagerCore<OpSemMemManagerMixin<

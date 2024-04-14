@@ -50,20 +50,24 @@ public:
     Expr m_v;
 
     explicit MemValTyImpl(Expr &&raw_val) {
+      #ifndef NDEBUG
       TypeChecker tc;
       assert(!raw_val || !strct::isStructVal(raw_val));
       if (raw_val) {
         assert((expr::op::typeCheck::correctTypeAny<ARRAY_TY,FUNCTIONAL_TY>(raw_val, tc)));
       }
+      #endif
       m_v = std::move(raw_val);
     }
 
     explicit MemValTyImpl(const Expr &raw_val) {
+      #ifndef NDEBUG
       TypeChecker tc;
       assert(!raw_val || !strct::isStructVal(raw_val));
       if (raw_val) {
         assert((expr::op::typeCheck::correctTypeAny<ARRAY_TY,FUNCTIONAL_TY>(raw_val, tc)));
       }
+      #endif
       m_v = raw_val;
     }
 

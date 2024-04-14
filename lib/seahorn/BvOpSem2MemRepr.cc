@@ -186,7 +186,6 @@ OpSemMemRepr::MemValTy OpSemMemArrayRepr::MemFill(PtrTy dPtr, char *sPtr,
 OpSemMemRepr::MemValTy
 OpSemMemLambdaRepr::storeAlignedWordToMem(Expr val, PtrTy ptr,
                                           PtrSortTy ptrSort, MemValTy mem) {
-  TypeChecker tc;
   PtrTy b0 = PtrTy(bind::bvar(0, ptrSort.toExpr()));
 
   Expr fappl = op::bind::fapp(mem.toExpr(), b0.toExpr());
@@ -198,10 +197,13 @@ OpSemMemLambdaRepr::storeAlignedWordToMem(Expr val, PtrTy ptr,
       bind::mkConst(mkTerm<std::string>("addr", m_efac), ptrSort.toExpr());
   Expr decl = bind::fname(addr);
   auto r = mk<LAMBDA>(decl, ite);
+  #ifndef NDEBUG
+  TypeChecker tc;
   tc.typeOf(r);
   if (tc.getErrorExp() != Expr()) {
     abort();
   }
+  #endif
   return MemValTy(r);
 }
 

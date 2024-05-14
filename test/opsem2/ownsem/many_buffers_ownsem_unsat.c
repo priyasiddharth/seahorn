@@ -1,4 +1,4 @@
-// RUN: %sea -m64 -DOWNSEM_BORCHK -O3 --inline --no-lower-gv-init-struct --horn-unify-assumes=true --horn-gsa --no-fat-fns=bcmp,memcpy,assert_bytes_match,ensure_linked_list_is_allocated,sea_aws_linked_list_is_valid --dsa=sea-cs-t --devirt-functions=sea-dsa --bmc=opsem --horn-vcgen-use-ite --horn-vcgen-only-dataflow=true --horn-bmc-coi=true --sea-opsem-allocator=static --horn-explicit-sp0=false --horn-bv2-lambdas --horn-bv2-simplify=true --own-sem "%s"  2>&1 | OutputCheck %s
+// RUN: %sea -m64 -DOWNSEM_BORCHK -O3 --inline --no-lower-gv-init-struct --horn-bv2-tracking-mem --horn-unify-assumes=true --horn-gsa --no-fat-fns=bcmp,memcpy,assert_bytes_match,ensure_linked_list_is_allocated,sea_aws_linked_list_is_valid --dsa=sea-cs-t --devirt-functions=sea-dsa --bmc=opsem --horn-vcgen-use-ite --horn-vcgen-only-dataflow=true --horn-bmc-coi=true --sea-opsem-allocator=static --horn-explicit-sp0=false --horn-bv2-lambdas --horn-bv2-simplify=true --own-sem "%s"  2>&1 | OutputCheck %s
 // CHECK: ^unsat$
 
 #include "seahorn/seahorn.h"
@@ -15,7 +15,7 @@ extern size_t nd_size_t();
 #define ND __declspec(noalias)
 extern ND void memhavoc(void *ptr, size_t size);
 
-#define MAX_BUFS 10
+#define MAX_BUFS 30
 static size_t buffer_counter = 0;
 
 typedef struct buf {
@@ -23,7 +23,7 @@ typedef struct buf {
     size_t len;    
 } Buffer;
 
-void process_buffer(char *buffer, size_t len ){
+void inline process_buffer(char *buffer, size_t len ) {
   memhavoc(buffer, len);
   size_t counter = sea_get_shadowmem(TRACK_CUSTOM0_MEM, buffer);
   size_t cache_counter;

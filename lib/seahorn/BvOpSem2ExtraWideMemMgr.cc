@@ -62,8 +62,8 @@ Expr ExtraWideMemManagerCore<T>::isMetadataSet(
   return m_ctx.alu().doEq(val, sentinel, getMetadataMemWordSzInBits());
 }
 template <class T>
-Expr ExtraWideMemManager<T>::ptrEq(ExtraWideMemManager::PtrTy p1,
-                                   ExtraWideMemManager::PtrTy p2) const {
+Expr ExtraWideMemManagerCore<T>::ptrEq(ExtraWideMemManagerCore::PtrTy p1,
+                                   ExtraWideMemManagerCore::PtrTy p2) const {
   // NOTE: we consider two pointers to be same if their address (base and ofset)
   //       is the same. Size is ignored. This is done to have parity with memset
   //       like operations that zero out main memory but do not touch shadow

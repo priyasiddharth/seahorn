@@ -15,7 +15,7 @@ extern size_t nd_size_t();
 #define ND __declspec(noalias)
 extern ND void memhavoc(void *ptr, size_t size);
 
-#define MAX_BUFS 10
+#define MAX_BUFS 30
 static size_t buffer_counter = 0;
 
 typedef struct buf {
